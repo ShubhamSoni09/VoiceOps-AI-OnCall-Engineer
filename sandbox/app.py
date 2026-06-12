@@ -12,4 +12,4 @@ def root() -> dict[str, str]:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy"}
+    return {"status": "ok"}

@@ -14,6 +14,7 @@ from app.voice_agent.router import router as voice_router
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 DESIGN_DIR = Path(__file__).resolve().parent.parent.parent / "design"
+FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 settings = get_settings()
 
@@ -86,6 +87,19 @@ async def dashboard():
     if page.exists():
         return FileResponse(page)
     return {"error": "Dashboard UI not found", "expected": str(page)}
+
+
+@app.get("/react")
+async def react_dashboard():
+    """Built React app — prefer `npm run dev` in frontend/ for development."""
+    index = FRONTEND_DIST / "index.html"
+    if index.exists():
+        return FileResponse(index)
+    return {
+        "error": "React build not found",
+        "dev": "cd frontend && npm install && npm run dev  →  http://localhost:5191",
+        "html_dashboard": "/dashboard",
+    }
 
 
 @app.get("/health")
