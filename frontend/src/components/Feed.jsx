@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { User, Circuitry, Waveform, ChatsCircle } from '@phosphor-icons/react'
+import OpenUIBriefing from './OpenUIBriefing.jsx'
 
 function Message({ m }) {
   const isUser = m.role === 'user'
@@ -42,6 +43,22 @@ export default function Feed({ messages, thinking, workspace }) {
   return (
     <div className="scroll" ref={scrollRef} style={{ flex: 1 }}>
       <div className="feed">
+        {/* Generative-UI showcase: the agent's incident briefing rendered from
+            OpenUI Lang via @openuidev/react-lang, mapped onto the VoiceOps design
+            system. Static sample for now; swap OpenUIBriefing's response for a
+            streamed LLM output (system prompt = voiceopsSystemPrompt) to go live. */}
+        <div className="msg agent">
+          <div className="gut"><span className="ava"><Circuitry size={15} /></span></div>
+          <div>
+            <span className="name">
+              VoiceOps
+              <span className="role">live briefing</span>
+              <span className="when">rendered by OpenUI</span>
+            </span>
+            <OpenUIBriefing />
+          </div>
+        </div>
+
         {messages.length === 0 && !thinking && (
           <div className="feed-empty">
             <ChatsCircle size={36} color="var(--ink-ghost)" />
