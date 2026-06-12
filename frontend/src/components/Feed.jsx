@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { User, Circuitry, Waveform, ChatsCircle, CaretDown, CaretRight, Terminal } from '@phosphor-icons/react'
+import OpenUIBriefing from './OpenUIBriefing.jsx'
 
 function DiffLine({ line }) {
   if (line.startsWith('+++') || line.startsWith('---')) {
@@ -156,7 +157,23 @@ export default function Feed({ messages, workspace }) {
   return (
     <div className="scroll" ref={scrollRef} style={{ flex: 1 }}>
       <div className="feed">
-        {messages.length === 0 && !thinking && (
+        {/* Generative-UI showcase: the agent's incident briefing rendered from
+            OpenUI Lang via @openuidev/react-lang, mapped onto the VoiceOps design
+            system. Static sample for now; swap OpenUIBriefing's response for a
+            streamed LLM output (system prompt = voiceopsSystemPrompt) to go live. */}
+        <div className="msg agent">
+          <div className="gut"><span className="ava"><Circuitry size={15} /></span></div>
+          <div>
+            <span className="name">
+              VoiceOps
+              <span className="role">live briefing</span>
+              <span className="when">rendered by OpenUI</span>
+            </span>
+            <OpenUIBriefing />
+          </div>
+        </div>
+
+        {messages.length === 0 && (
           <div className="feed-empty">
             <ChatsCircle size={36} color="var(--ink-ghost)" />
             <p>{emptyText}</p>
