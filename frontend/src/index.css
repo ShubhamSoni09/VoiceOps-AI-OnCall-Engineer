@@ -354,12 +354,16 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .action h3 { margin: 9px 0 4px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .action .sub { font-size: 12.5px; color: var(--ink-dim); padding: 0 14px 12px; }
 .action .preview {
-  margin: 0 14px 12px; background: var(--bg-sunk); border: 1px solid var(--line);
-  border-radius: 8px; padding: 9px 11px; font-size: 11.5px; line-height: 1.7;
+  margin: 0 14px 14px; background: var(--bg-sunk); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; font-size: 11.5px; line-height: 1.5;
 }
-.action .preview .row { display: flex; gap: 8px; }
-.action .preview .row .k { color: var(--ink-faint); width: 58px; flex: none; }
-.action .preview .row .v { color: var(--ink-dim); }
+.action .preview .row {
+  display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 6px 14px;
+  align-items: start; padding: 5px 0;
+}
+.action .preview .row + .row { border-top: 1px solid var(--line); margin-top: 2px; padding-top: 8px; }
+.action .preview .row .k { color: var(--ink-faint); flex: none; }
+.action .preview .row .v { color: var(--ink-dim); word-break: break-word; overflow-wrap: anywhere; min-width: 0; }
 .action .risk {
   display: flex; align-items: center; gap: 8px; margin: 0 14px 12px;
   font-size: 11.5px; color: var(--warn);
@@ -503,3 +507,118 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
 }
 .login-error { color: var(--crit); font-size: 13px; margin: 0; }
+
+/* ============================================================
+   Expandable diff / output panel in feed messages
+   ============================================================ */
+.msg-details { margin-top: 8px; }
+
+.details-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; color: var(--ink-faint); padding: 3px 0;
+  cursor: pointer; transition: color .15s;
+}
+.details-toggle:hover { color: var(--ink-dim); }
+.details-toggle svg { flex-shrink: 0; }
+
+.details-badge {
+  display: inline-flex; align-items: center; height: 16px; padding: 0 6px;
+  border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+  background: var(--elev-2); color: var(--ink-faint); border: 1px solid var(--line);
+  margin-left: 4px;
+}
+
+.details-panel {
+  margin-top: 6px; border: 1px solid var(--line); border-radius: 9px;
+  overflow: hidden; background: var(--bg-sunk);
+}
+
+.details-tabs {
+  display: flex; border-bottom: 1px solid var(--line);
+}
+.details-tab {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 14px; font-size: 11.5px; color: var(--ink-faint);
+  cursor: pointer; border-right: 1px solid var(--line); transition: background .13s, color .13s;
+}
+.details-tab:hover { background: var(--elev); color: var(--ink-dim); }
+.details-tab.active { color: var(--ink); background: var(--elev); }
+
+/* diff view */
+.diff-view {
+  overflow-x: auto; font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11.5px; line-height: 1.6; padding: 10px 0;
+  max-height: 360px; overflow-y: auto;
+}
+.diff-line { padding: 0 14px; white-space: pre; }
+.diff-meta { color: var(--ink-faint); }
+.diff-hunk { color: var(--info); background: rgba(143,180,214,0.07); padding: 1px 14px; }
+.diff-add  { color: var(--ok);   background: rgba(92,185,140,0.10); }
+.diff-del  { color: var(--crit); background: rgba(240,99,95,0.10); }
+.diff-ctx  { color: var(--ink-faint); }
+
+/* pytest output view */
+.output-view {
+  margin: 0; padding: 12px 14px; font-size: 11.5px; line-height: 1.65;
+  color: var(--ink-dim); overflow-x: auto; max-height: 260px; overflow-y: auto;
+  font-family: "JetBrains Mono", ui-monospace, monospace; white-space: pre-wrap;
+}
+
+/* live (in-progress) details panel — appears while streaming */
+.live-details {
+  margin-top: 8px; border-color: var(--accent-soft);
+}
+.live-output {
+  border-top: none;
+  /* subtle amber tint so it reads as "live" */
+  background: rgba(255,176,46,0.03);
+}
+/* blinking cursor at end of live output */
+.live-output::after {
+  content: "▋";
+  display: inline-block;
+  color: var(--accent);
+  animation: blink 1s step-start infinite;
+}
+
+.btn-github, .login-card .btn-github {
+  width: 100%; padding: 11px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--elev); color: var(--ink); font-weight: 600; cursor: pointer;
+}
+.login-divider {
+  display: flex; align-items: center; gap: 10px; color: var(--ink-faint); font-size: 12px;
+}
+.login-divider::before, .login-divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--line);
+}
+.linkish {
+  margin-left: 8px; border: none; background: none; color: var(--accent);
+  font-size: 12px; cursor: pointer; text-decoration: underline;
+}
+.repo-overlay {
+  position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.55);
+  display: grid; place-items: center; padding: 20px;
+}
+.repo-modal {
+  width: min(520px, 96vw); max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+}
+.repo-modal-head { display: flex; justify-content: space-between; align-items: center; }
+.repo-modal h2 { margin: 0; font-size: 18px; }
+.repo-close { border: none; background: none; color: var(--ink-faint); font-size: 22px; cursor: pointer; }
+.repo-sub { color: var(--ink-dim); font-size: 13px; margin: 8px 0 12px; }
+.repo-search {
+  width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg-sunk); color: var(--ink); margin-bottom: 10px;
+}
+.repo-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+.repo-item {
+  width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--elev); color: var(--ink); padding: 10px 12px; margin-bottom: 8px; cursor: pointer;
+}
+.repo-item:hover { border-color: var(--accent); }
+.repo-name { display: block; font-weight: 600; font-size: 14px; }
+.repo-meta { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 4px; }
+.repo-error { color: var(--crit); font-size: 13px; }
+.repo-empty, .repo-loading { color: var(--ink-faint); font-size: 13px; padding: 12px 0; }
+.repo-current { font-size: 12px; color: var(--ink-dim); margin-bottom: 8px; }

@@ -7,6 +7,7 @@ from app.auth.models import ROLE_PERMISSIONS, UserPublic, UserRecord
 from app.auth.security import decode_access_token, to_public_user
 from app.auth.users import UserStore
 from app.config import Settings, get_settings
+from app.integrations.github.store import get_github_token_store
 
 security = HTTPBearer(auto_error=False)
 
@@ -49,7 +50,11 @@ async def get_current_user(
     store: UserStore = Depends(get_user_store),
 ) -> UserPublic:
     user = _resolve_user(credentials, settings, store)
-    return to_public_user(user)
+    github_login = None
+    conn = get_github_token_store().get(user.id)
+    if conn:
+        github_login = conn.github_login
+    return to_public_user(user, github_login=github_login)
 
 
 def require_permission(permission: str):

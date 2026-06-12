@@ -2,26 +2,26 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_user_store
-from app.auth.users import UserStore
 from app.config import Settings, get_settings
+from app.integrations.github.store import get_github_token_store
 from app.main import app
 
 
 @pytest.fixture
 def client(tmp_path):
-    users_path = tmp_path / "users.json"
-    store = UserStore(users_path)
+    get_settings.cache_clear()
+    get_user_store.cache_clear()
+    get_github_token_store.cache_clear()
 
     test_settings = Settings(
-        users_store_path=users_path,
+        data_dir=tmp_path,
         jwt_secret="test-secret-key",
-        memory_store_path=str(tmp_path / "memory.json"),
+        memory_store_path="memory.json",
         llm_provider="mock",
         tts_provider="mock",
         stt_provider="whisper",
     )
 
-    app.dependency_overrides[get_user_store] = lambda: store
     app.dependency_overrides[get_settings] = lambda: test_settings
 
     with TestClient(app) as test_client:

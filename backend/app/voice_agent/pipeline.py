@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+import asyncio
+import json
+
 from app.config import Settings, get_settings
 from app.orchestrator import WorkspaceOrchestrator
 from app.voice_agent.context.enricher import ContextEnricher, SessionMemory
@@ -33,6 +38,7 @@ class VoiceAgentPipeline:
         filename: str = "audio.wav",
         incident_context: dict | None = None,
         include_tts: bool | None = None,
+        user_id: str | None = None,
     ) -> VoiceProcessResponse:
         transcription = await self._stt.transcribe(audio_bytes, filename=filename)
         return await self.process_text(
@@ -40,6 +46,7 @@ class VoiceAgentPipeline:
             session_id=session_id,
             incident_context=incident_context,
             include_tts=include_tts,
+            user_id=user_id,
         )
 
     async def process_text(
@@ -49,6 +56,8 @@ class VoiceAgentPipeline:
         session_id: str = "default",
         incident_context: dict | None = None,
         include_tts: bool | None = None,
+        progress: asyncio.Queue | None = None,
+        user_id: str | None = None,
     ) -> VoiceProcessResponse:
         transcript = text.strip()
         if not transcript:
@@ -69,7 +78,9 @@ class VoiceAgentPipeline:
             incident_context=incident_context,
         )
 
-        orchestrator_result = await self._orchestrator.execute(command, transcript)
+        orchestrator_result = await self._orchestrator.execute(
+            command, transcript, progress=progress, user_id=user_id
+        )
 
         response_text = build_response_text(intent, command, context, orchestrator_result)
         use_tts = include_tts if include_tts is not None else self._settings.tts_on_voice
@@ -89,5 +100,47 @@ class VoiceAgentPipeline:
             orchestrator_result=orchestrator_result,
         )
 
+    async def process_text_stream(
+        self,
+        text: str,
+        *,
+        session_id: str = "default",
+        incident_context: dict | None = None,
+        user_id: str | None = None,
+    ):
+        """Async generator yielding SSE-formatted lines. Final event is {"type":"done","data":{...}}."""
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def _run() -> None:
+            try:
+                result = await self.process_text(
+                    text,
+                    session_id=session_id,
+                    incident_context=incident_context,
+                    include_tts=False,
+                    progress=queue,
+                    user_id=user_id,
+                )
+                await queue.put({"type": "done", "data": result.model_dump()})
+            except Exception as exc:
+                await queue.put({"type": "error", "message": str(exc)})
+
+        task = asyncio.create_task(_run())
+
+        # Emit the first step immediately so the UI isn't blank
+        yield _sse({"type": "step", "label": "Understanding command…"})
+
+        while True:
+            event = await queue.get()
+            yield _sse(event)
+            if event["type"] in ("done", "error"):
+                break
+
+        await task
+
     def clear_session(self, session_id: str) -> None:
         self._memory.clear(session_id)
+
+
+def _sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload)}\n\n"

@@ -236,10 +236,10 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .inc .age { font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
 
 .rail-foot {
-  margin-top: auto; border-top: 1px solid var(--line); padding: 12px 16px;
-  display: flex; flex-direction: column; gap: 9px;
+  margin-top: auto; border-top: 1px solid var(--line); padding: 14px 16px 16px;
+  display: flex; flex-direction: column; gap: 12px;
 }
-.integ { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--ink-dim); }
+.integ { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--ink-dim); line-height: 1.45; padding: 2px 0; }
 .integ i { font-size: 15px; width: 16px; color: var(--ink-faint); }
 .integ .ind { margin-left: auto; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 .integ .ind.off { background: var(--ink-ghost); }
@@ -298,7 +298,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .step.active .lab { color: var(--accent); }
 
 /* ---- Conversation / log feed ---- */
-.feed { padding: 20px 22px 28px; display: flex; flex-direction: column; gap: 18px; min-height: 100%; }
+.feed { padding: 24px 22px 40px; display: flex; flex-direction: column; gap: 28px; min-height: 100%; }
 .feed-day { text-align: center; font-size: 11px; color: var(--ink-faint); position: relative; margin: 2px 0; }
 .feed-empty {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -318,24 +318,30 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .integ.off .ind { background: var(--ink-ghost); box-shadow: none; }
 .statusbar.empty .pill { color: var(--ink-faint); }
 
-.msg { display: grid; grid-template-columns: 30px 1fr; gap: 12px; max-width: 760px; }
-.msg .gut { display: flex; flex-direction: column; align-items: center; }
+.msg { display: grid; grid-template-columns: 34px 1fr; gap: 14px; max-width: 820px; }
+.msg > div:last-child { min-width: 0; }
+.msg .gut { display: flex; flex-direction: column; align-items: center; padding-top: 2px; }
 .msg .ava {
-  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center;
   font-size: 15px; flex: none;
 }
 .msg.user .ava { background: var(--elev-2); color: var(--ink-dim); border: 1px solid var(--line); }
 .msg.agent .ava { background: var(--accent); color: var(--on-accent); box-shadow: 0 0 16px -4px var(--accent); }
-.msg .name { font-size: 12px; font-weight: 600; }
-.msg .name .role { color: var(--ink-faint); font-weight: 450; margin-left: 7px; font-size: 11px; }
-.msg .when { color: var(--ink-faint); font-size: 11px; margin-left: 7px; }
-.msg .text { margin-top: 4px; color: var(--ink-dim); font-size: 13.5px; }
+.msg .name {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+  font-size: 12px; font-weight: 600; line-height: 1.55;
+}
+.msg .name .role { color: var(--ink-faint); font-weight: 450; margin-left: 0; font-size: 11px; }
+.msg .when { color: var(--ink-faint); font-size: 11px; margin-left: 0; white-space: nowrap; }
+.msg .text { margin-top: 10px; color: var(--ink-dim); font-size: 14px; line-height: 1.65; word-break: break-word; }
 .msg.user .text { color: var(--ink); }
 .msg .text b { color: var(--ink); font-weight: 600; }
+.msg .text p { margin: 0 0 10px; }
+.msg .text p:last-child { margin-bottom: 0; }
 
 .voicequote {
-  margin-top: 6px; display: inline-flex; align-items: center; gap: 8px;
-  font-size: 11px; color: var(--ink-faint);
+  margin-top: 10px; display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--ink-faint); line-height: 1.4;
 }
 .voicequote i { color: var(--accent); }
 
@@ -357,8 +363,8 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .block pre .add { color: var(--ok); }
 .block pre .del { color: var(--crit); }
 
-.findings { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
-.finding { display: grid; grid-template-columns: 16px 1fr; gap: 9px; font-size: 13px; color: var(--ink-dim); }
+.findings { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.finding { display: grid; grid-template-columns: 18px 1fr; gap: 10px; font-size: 13px; color: var(--ink-dim); line-height: 1.55; }
 .finding i { color: var(--accent); font-size: 15px; margin-top: 1px; }
 .finding b { color: var(--ink); font-weight: 600; }
 
@@ -373,7 +379,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 /* ============================================================
    Right rail : action card + context + artifacts
    ============================================================ */
-.rail--right .scroll { padding: 16px; display: flex; flex-direction: column; gap: 18px; }
+.rail--right .scroll { padding: 18px; display: flex; flex-direction: column; gap: 22px; }
 
 .section-lab { font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 10px; }
 
@@ -389,14 +395,18 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 }
 .action .ribbon .lvdot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: livepulse 2s infinite; }
 .action h3 { margin: 9px 0 4px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.action .sub { font-size: 12.5px; color: var(--ink-dim); padding: 0 14px 12px; }
+.action .sub { font-size: 12.5px; color: var(--ink-dim); padding: 0 14px 14px; line-height: 1.55; }
 .action .preview {
-  margin: 0 14px 12px; background: var(--bg-sunk); border: 1px solid var(--line);
-  border-radius: 8px; padding: 9px 11px; font-size: 11.5px; line-height: 1.7;
+  margin: 0 14px 14px; background: var(--bg-sunk); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; font-size: 11.5px; line-height: 1.5;
 }
-.action .preview .row { display: flex; gap: 8px; }
-.action .preview .row .k { color: var(--ink-faint); width: 58px; flex: none; }
-.action .preview .row .v { color: var(--ink-dim); }
+.action .preview .row {
+  display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 6px 14px;
+  align-items: start; padding: 5px 0;
+}
+.action .preview .row + .row { border-top: 1px solid var(--line); margin-top: 2px; padding-top: 8px; }
+.action .preview .row .k { color: var(--ink-faint); flex: none; }
+.action .preview .row .v { color: var(--ink-dim); word-break: break-word; overflow-wrap: anywhere; min-width: 0; }
 .action .risk {
   display: flex; align-items: center; gap: 8px; margin: 0 14px 12px;
   font-size: 11.5px; color: var(--warn);
@@ -417,14 +427,15 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .btn i { font-size: 16px; }
 .action.resolved .acts, .action.resolved .risk { display: none; }
 .action .doneline {
-  display: none; align-items: center; gap: 9px; padding: 0 14px 14px; font-size: 12.5px; color: var(--ok);
+  display: none; align-items: flex-start; gap: 9px; padding: 4px 14px 18px; font-size: 12.5px; color: var(--ok);
+  line-height: 1.55;
 }
 .action.resolved .doneline { display: flex; }
 .action.rejected .doneline { display: flex; color: var(--ink-faint); }
 
 /* context metrics */
-.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
-.metric { background: var(--panel); padding: 11px 12px; }
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.metric { background: var(--panel); padding: 12px 13px; border: 1px solid var(--line); border-radius: 10px; }
 .metric .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); }
 .metric .v { font-size: 19px; font-weight: 600; margin-top: 4px; letter-spacing: -0.02em; }
 .metric .v small { font-size: 11px; font-weight: 500; color: var(--ink-faint); letter-spacing: 0; }
@@ -436,16 +447,28 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 
 /* artifacts */
 .artifact {
-  width: 100%; text-align: left; display: flex; align-items: center; gap: 11px;
-  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px;
+  width: 100%; text-align: left; display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 0;
   color: var(--ink-dim); transition: background .14s, border-color .14s;
 }
+#artifactsList { display: flex; flex-direction: column; gap: 10px; }
 .artifact:hover { background: var(--elev); border-color: var(--line-strong); color: var(--ink); }
-.artifact i.lead { font-size: 18px; color: var(--ink-faint); }
+.artifact i.lead { font-size: 18px; color: var(--ink-faint); margin-top: 1px; }
 .artifact .af { min-width: 0; flex: 1; }
-.artifact .af b { display: block; font-size: 12.5px; font-weight: 500; color: var(--ink); }
-.artifact .af small { font-size: 11px; color: var(--ink-faint); }
-.artifact i.go { font-size: 14px; color: var(--ink-faint); }
+.artifact .af b { display: block; font-size: 12.5px; font-weight: 500; color: var(--ink); line-height: 1.35; }
+.artifact .af small { display: block; font-size: 11px; color: var(--ink-faint); margin-top: 4px; line-height: 1.4; }
+.artifact i.go { font-size: 14px; color: var(--ink-faint); margin-top: 2px; }
+
+.raw-output { margin-top: 16px; }
+.raw-output summary {
+  cursor: pointer; font-size: 12px; color: var(--ink-faint); padding: 4px 0 6px; user-select: none;
+}
+.raw-output pre {
+  margin-top: 8px; padding: 12px 14px; background: var(--elev); border: 1px solid var(--line);
+  border-radius: 8px; font-size: 11px; white-space: pre-wrap; max-height: 200px; overflow: auto;
+  line-height: 1.55;
+}
+
 
 /* ============================================================
    Push-to-talk bar
@@ -518,6 +541,31 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   .ptt { grid-template-columns: auto 1fr; }
   .ptt-hint { display: none; }
 }
+
+/* ============================================================
+   Repo picker (GitHub)
+   ============================================================ */
+.repo-overlay {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: rgba(0,0,0,0.55); padding: 20px;
+}
+.repo-modal {
+  width: min(520px, 96vw); max-height: 80vh; overflow: hidden; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+}
+.repo-modal-head { display: flex; justify-content: space-between; align-items: center; }
+.repo-modal h2 { margin: 0; font-size: 18px; }
+.repo-close { border: none; background: none; color: var(--ink-faint); font-size: 22px; cursor: pointer; }
+.repo-sub { color: var(--ink-dim); font-size: 13px; margin: 8px 0 12px; }
+.repo-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+.repo-pick {
+  width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--elev); color: var(--ink); padding: 10px 12px; margin-bottom: 8px; cursor: pointer;
+}
+.repo-pick b { display: block; font-size: 14px; }
+.repo-pick small { display: block; color: var(--ink-faint); margin-top: 4px; }
+.repo-err { color: var(--crit); font-size: 13px; min-height: 18px; }
+.repo-loading, .repo-empty { color: var(--ink-faint); font-size: 13px; padding: 12px 0; }
 
 /* ============================================================
    Reduced motion
@@ -640,8 +688,9 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
             </div>
             <p class="sub" id="actionSub">Connect a repository via MCP to start investigating with voice commands.</p>
             <div class="preview mono" id="actionPreview">
+              <div class="row"><span class="k">incident</span><span class="v" id="actionIncident">—</span></div>
               <div class="row"><span class="k">repository</span><span class="v" id="actionRepo">not connected</span></div>
-              <div class="row"><span class="k">workspace</span><span class="v" id="actionWorkspace">—</span></div>
+              <div class="row"><span class="k">service</span><span class="v" id="actionService">—</span></div>
               <div class="row"><span class="k">status</span><span class="v" id="actionStatus">disconnected</span></div>
             </div>
             <div class="acts" id="actionButtons" style="display:none">
@@ -827,9 +876,32 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
       const icon = INTEG_ICONS[item.id] || "ph-plugs-connected";
       const off = item.connected ? "" : " off";
       const title = item.detail ? ' title="' + escapeHtml(item.detail) + '"' : "";
-      return '<div class="integ' + off + '"' + title + '><i class="ph ' + icon + '"></i> ' +
+      const click = (!item.connected && item.id === "github")
+        ? ' data-connect-github="1" style="cursor:pointer"'
+        : (item.connected && item.id === "github")
+          ? ' data-pick-repo="1" style="cursor:pointer" title="Change repository"'
+          : "";
+      return '<div class="integ' + off + '"' + title + click + '><i class="ph ' + icon + '"></i> ' +
         escapeHtml(item.label) + ' <span class="ind"></span></div>';
     }).join("");
+    const gh = el.querySelector("[data-connect-github]");
+    if (gh) gh.addEventListener("click", connectGitHub);
+    const ghPick = el.querySelector("[data-pick-repo]");
+    if (ghPick) ghPick.addEventListener("click", openRepoPicker);
+  }
+
+  async function connectGitHub() {
+    try {
+      const res = await authFetch("/auth/github/authorize-url");
+      if (!res.ok) {
+        alert("GitHub OAuth is not configured on the server yet.");
+        return;
+      }
+      const data = await res.json();
+      window.location.href = data.url;
+    } catch (e) {
+      alert("Could not start GitHub login.");
+    }
   }
 
   function renderIncidents(incidents, connected) {
@@ -837,12 +909,19 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     const countEl = $("#incidentCount");
     if (!list) return;
 
-    const open = incidents.filter(function (i) {
+    const sorted = (incidents || []).slice().sort(function (a, b) {
+      const ar = String(a.status || "").toLowerCase() === "resolved";
+      const br = String(b.status || "").toLowerCase() === "resolved";
+      if (ar !== br) return ar ? 1 : -1;
+      return (a.age_minutes || 99) - (b.age_minutes || 99);
+    });
+
+    const open = sorted.filter(function (i) {
       return String(i.status || "").toLowerCase() !== "resolved";
     });
     if (countEl) countEl.textContent = open.length + " open";
 
-    if (!connected || incidents.length === 0) {
+    if (!connected || sorted.length === 0) {
       list.innerHTML = '<div class="rail-empty" id="incidentEmpty">' +
         '<i class="ph ph-folder-open"></i>' +
         (connected
@@ -853,22 +932,28 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
       return;
     }
 
-    list.innerHTML = incidents.map(function (inc, idx) {
-      const live = idx === 0 ? " live" : "";
-      const current = idx === 0 ? ' aria-current="true"' : "";
-      const sev = sevClass(inc.severity || inc.status);
+    const firstOpenIdx = sorted.findIndex(function (i) {
+      return String(i.status || "").toLowerCase() !== "resolved";
+    });
+
+    list.innerHTML = sorted.map(function (inc, idx) {
+      const isResolved = String(inc.status || "").toLowerCase() === "resolved";
+      const live = !isResolved && idx === firstOpenIdx ? " live" : "";
+      const current = live ? ' aria-current="true"' : "";
+      const sev = isResolved ? "ok" : sevClass(inc.severity);
+      const tag = isResolved ? "resolved" : (inc.severity || inc.status || "—");
       return '<button class="inc' + live + '" data-inc-idx="' + idx + '"' + current + ">" +
         '<span class="sev ' + sev + '"></span>' +
         '<span class="inc-main">' +
         '<span class="inc-title">' + escapeHtml(inc.title || "Untitled incident") + "</span>" +
         '<span class="inc-meta"><span class="mono svc">' + escapeHtml(inc.service || "—") + "</span>" +
-        '<span class="inc-sev-tag">' + escapeHtml(inc.severity || inc.status || "—") + "</span></span>" +
+        '<span class="inc-sev-tag">' + escapeHtml(tag) + "</span></span>" +
         "</span>" +
-        '<span class="age">' + formatAge(inc.started_at || inc.age_minutes) + "</span>" +
+        '<span class="age">' + formatAge(inc.age_minutes) + "</span>" +
         "</button>";
     }).join("");
 
-    selectedIncident = incidents[0];
+    selectedIncident = firstOpenIdx >= 0 ? sorted[firstOpenIdx] : sorted[0];
     list.querySelectorAll(".inc").forEach(function (btn) {
       btn.addEventListener("click", function () {
         list.querySelectorAll(".inc").forEach(function (b) {
@@ -878,8 +963,9 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
         btn.classList.add("live");
         btn.setAttribute("aria-current", "true");
         const idx = parseInt(btn.getAttribute("data-inc-idx"), 10);
-        selectedIncident = incidents[idx];
+        selectedIncident = sorted[idx];
         renderIncidentHeader(consoleData);
+        renderActionCard(consoleData);
       });
     });
   }
@@ -896,15 +982,21 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     const factAgent = $("#factAgent");
 
     if (inc) {
-      const sev = String(inc.severity || "ACTIVE").toUpperCase();
-      hdrSev.className = "sev-badge " + sevClass(inc.severity);
-      hdrSev.innerHTML = '<span class="dot"></span>' + escapeHtml(sev);
+      const isResolved = String(inc.status || "").toLowerCase() === "resolved";
+      const sevLabel = isResolved ? "RESOLVED" : String(inc.severity || "ACTIVE").toUpperCase();
+      hdrSev.className = "sev-badge " + (isResolved ? "ok" : sevClass(inc.severity));
+      hdrSev.innerHTML = '<span class="dot"></span>' + escapeHtml(sevLabel);
       hdrTitle.textContent = inc.title || "Incident";
       hdrIncidentId.textContent = inc.id || "—";
-      if (factRepo) factRepo.textContent = inc.service || ws.name || "—";
-      if (factBranch) factBranch.textContent = inc.started_at ? formatAge(inc.started_at) + " ago" : "—";
-      if (factOnCall) factOnCall.textContent = data.user.name || "—";
-      if (factAgent) factAgent.textContent = inc.agent_status || "idle";
+      const facts = $("#incFacts");
+      if (facts) {
+        facts.innerHTML =
+          '<div class="fact"><span class="k">Service</span><span class="v mono">' + escapeHtml(inc.service || "—") + "</span></div>" +
+          '<div class="fact"><span class="k">Started</span><span class="v">' + formatAge(inc.age_minutes) + " ago</span></div>" +
+          '<div class="fact"><span class="k">Error rate</span><span class="v mono' + (inc.error_rate ? " warnv" : "") + '">' + escapeHtml(inc.error_rate || "—") + "</span></div>" +
+          '<div class="fact"><span class="k">Reporter</span><span class="v">' + escapeHtml(inc.reporter || "—") + "</span></div>" +
+          '<div class="fact"><span class="k">Agent</span><span class="v">' + escapeHtml(inc.agent_status || "idle") + "</span></div>";
+      }
       return;
     }
 
@@ -933,15 +1025,17 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   function renderActionCard(data) {
     const ws = data.workspace;
     const actionSub = $("#actionSub");
+    const actionIncident = $("#actionIncident");
     const actionRepo = $("#actionRepo");
-    const actionWorkspace = $("#actionWorkspace");
+    const actionService = $("#actionService");
     const actionStatus = $("#actionStatus");
     const feedEmptyText = $("#feedEmptyText");
 
     if (!ws.connected) {
       if (actionSub) actionSub.textContent = "Set VOICEOPS_WORKSPACE in backend/.env to the same path as your MCP server.";
+      if (actionIncident) actionIncident.textContent = "—";
       if (actionRepo) actionRepo.textContent = "not connected";
-      if (actionWorkspace) actionWorkspace.textContent = "—";
+      if (actionService) actionService.textContent = "—";
       if (actionStatus) actionStatus.textContent = "disconnected";
       if (feedEmptyText) {
         feedEmptyText.innerHTML = "Connect a repository, then hold <kbd style=\"padding:0.1rem 0.35rem;border:1px solid var(--line);border-radius:4px;\">space</kbd> or tap the mic to talk to VoiceOps.";
@@ -950,13 +1044,18 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     }
 
     if (actionSub) {
-      actionSub.textContent = selectedIncident
-        ? "Ask VoiceOps to investigate, patch, deploy, or check status."
-        : "Repository connected. Hold space or tap the mic to start investigating.";
+      if (selectedIncident && selectedIncident.voice_hint) {
+        actionSub.textContent = 'Selected: ' + selectedIncident.id + '. Try saying: "' + selectedIncident.voice_hint + '"';
+      } else if (selectedIncident) {
+        actionSub.textContent = "Selected incident " + selectedIncident.id + ". Hold space or tap the mic to investigate.";
+      } else {
+        actionSub.textContent = "Repository connected. Hold space or tap the mic to start investigating.";
+      }
     }
-    if (actionRepo) actionRepo.textContent = ws.remote_url || ws.name || "local";
-    if (actionWorkspace) actionWorkspace.textContent = ws.name || "—";
-    if (actionStatus) actionStatus.textContent = selectedIncident ? "incident active" : "listening";
+    if (actionIncident) actionIncident.textContent = selectedIncident ? selectedIncident.id : "—";
+    if (actionRepo) actionRepo.textContent = ws.name || "sandbox";
+    if (actionService) actionService.textContent = selectedIncident ? (selectedIncident.service || ws.name) : (ws.name || "—");
+    if (actionStatus) actionStatus.textContent = selectedIncident ? (selectedIncident.status || "active") : "listening";
     if (feedEmptyText) {
       feedEmptyText.innerHTML = "Hold <kbd style=\"padding:0.1rem 0.35rem;border:1px solid var(--line);border-radius:4px;\">space</kbd> or tap the mic to start talking to VoiceOps.";
     }
@@ -1032,6 +1131,9 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     renderMetrics(data.metrics || [], data.workspace);
     renderArtifacts(data.artifacts || []);
     if (data.user) applyUserToUI(data.user);
+    if (data.github && data.github.repo_required) {
+      openRepoPicker();
+    }
   }
 
   async function loadConsole() {
@@ -1053,6 +1155,90 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   }
 
   await loadConsole();
+
+  const ghParams = new URLSearchParams(window.location.search);
+  if (ghParams.get("github") === "connected") {
+    addAgentMessage("GitHub connected — select a repository to start.", "github");
+    history.replaceState({}, "", "/dashboard");
+    openRepoPicker();
+  }
+  if (ghParams.get("select_repo") === "1") {
+    history.replaceState({}, "", "/dashboard");
+    openRepoPicker();
+  }
+
+  async function openRepoPicker() {
+    const overlay = ensureRepoPickerDom();
+    overlay.style.display = "grid";
+    const list = overlay.querySelector(".repo-list");
+    const err = overlay.querySelector(".repo-err");
+    list.innerHTML = '<li class="repo-loading">Loading repositories…</li>';
+    err.textContent = "";
+    try {
+      const res = await authFetch("/auth/github/repos");
+      if (!res.ok) throw new Error("Could not load repositories");
+      const data = await res.json();
+      const repos = data.repos || [];
+      if (!repos.length) {
+        list.innerHTML = '<li class="repo-empty">No repositories found.</li>';
+        return;
+      }
+      list.innerHTML = repos.map(function (r) {
+        return '<li><button type="button" class="repo-pick" data-repo="' + escapeHtml(r.full_name) + '">' +
+          '<b>' + escapeHtml(r.full_name) + '</b><small>' +
+          (r.private ? "private" : "public") + (r.description ? " · " + escapeHtml(r.description) : "") +
+          "</small></button></li>";
+      }).join("");
+      list.querySelectorAll(".repo-pick").forEach(function (btn) {
+        btn.addEventListener("click", function () { selectRepo(btn.getAttribute("data-repo")); });
+      });
+    } catch (e) {
+      err.textContent = e.message || "Failed to load repos";
+      list.innerHTML = "";
+    }
+  }
+
+  async function selectRepo(fullName) {
+    const overlay = ensureRepoPickerDom();
+    const err = overlay.querySelector(".repo-err");
+    err.textContent = "";
+    try {
+      const res = await authFetch("/auth/github/repo", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo: fullName }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(function () { return {}; });
+        throw new Error(data.detail || "Could not select repository");
+      }
+      overlay.style.display = "none";
+      addAgentMessage("Connected to <b>" + escapeHtml(fullName) + "</b>. You can investigate with voice now.", "github");
+      await loadConsole();
+    } catch (e) {
+      err.textContent = e.message || "Selection failed";
+    }
+  }
+
+  function ensureRepoPickerDom() {
+    let overlay = document.getElementById("repoPicker");
+    if (overlay) return overlay;
+    overlay = document.createElement("div");
+    overlay.id = "repoPicker";
+    overlay.className = "repo-overlay";
+    overlay.style.display = "none";
+    overlay.innerHTML =
+      '<div class="repo-modal">' +
+      '<div class="repo-modal-head"><h2>Select repository</h2>' +
+      '<button type="button" class="repo-close" aria-label="Close">×</button></div>' +
+      '<p class="repo-sub">Choose which repo VoiceOps should patch and open PRs against.</p>' +
+      '<p class="repo-err"></p><ul class="repo-list"></ul></div>';
+    overlay.querySelector(".repo-close").addEventListener("click", function () {
+      overlay.style.display = "none";
+    });
+    document.body.appendChild(overlay);
+    return overlay;
+  }
 
   $("#logoutBtn").addEventListener("click", function () {
     localStorage.removeItem(TOKEN_KEY);
@@ -1266,9 +1452,8 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     const steps = data.context && data.context.suggested_next_steps ? data.context.suggested_next_steps : [];
     let html = "<p>" + escapeHtml(data.response_text || data.speech?.text || "") + "</p>";
     if (orch && orch.command_output) {
-      html += '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--ink-faint)">Raw test output</summary>' +
-        '<pre class="mono" style="margin-top:8px;padding:10px;background:var(--surface-2);border-radius:8px;font-size:11px;white-space:pre-wrap;max-height:180px;overflow:auto">' +
-        escapeHtml(orch.command_output) + "</pre></details>";
+      html += '<details class="raw-output"><summary>Raw test output</summary>' +
+        '<pre class="mono">' + escapeHtml(orch.command_output) + "</pre></details>";
     }
     if (steps.length && !(orch && orch.executed)) {
       html += '<div class="findings">' + steps.map(function (s) {
@@ -1281,16 +1466,31 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
       }).join("") + "</div>";
       appendArtifacts(orch.artifacts || []);
     }
+    if (orch && orch.pr_url) {
+      html += '<div class="finding"><i class="ph ph-git-pull-request"></i><span>Open ' +
+        '<a href="' + escapeHtml(orch.pr_url) + '" target="_blank" rel="noopener">pull request on GitHub</a></span></div>';
+    }
     addAgentMessage(html, data.intent.action + " · " + data.intent.intent);
     highlightStepper(data.command.action);
     if (orch && orch.executed) {
-      card.classList.add("resolved");
-      if (actionButtons) actionButtons.style.display = "none";
-      const ribbon = card.querySelector(".ribbon");
-      if (ribbon) ribbon.innerHTML = '<span class="lvdot"></span>DONE';
-      const title = card.querySelector("h3");
-      if (title) title.textContent = "Workspace action completed";
-      doneline.innerHTML = '<i class="ph ph-check-circle" style="color:var(--ok)"></i> ' + escapeHtml(data.response_text || "");
+      if (orch.all_tests_pass) {
+        card.classList.add("resolved");
+        if (actionButtons) actionButtons.style.display = "none";
+        const ribbon = card.querySelector(".ribbon");
+        if (ribbon) ribbon.innerHTML = '<span class="lvdot"></span>DONE';
+        const title = card.querySelector("h3");
+        if (title) title.textContent = "All tests passing — incidents resolved";
+        doneline.innerHTML = '<i class="ph ph-check-circle" style="color:var(--ok)"></i> ' + escapeHtml(data.response_text || "");
+      } else {
+        card.classList.remove("resolved");
+        if (actionButtons) actionButtons.style.display = "none";
+        const ribbon = card.querySelector(".ribbon");
+        if (ribbon) ribbon.innerHTML = '<span class="lvdot"></span>IN PROGRESS';
+        const title = card.querySelector("h3");
+        if (title) title.textContent = "Patch applied — tests still failing";
+        doneline.innerHTML = '<i class="ph ph-warning-circle" style="color:var(--warn)"></i> ' +
+          escapeHtml(data.response_text || "") + " Incidents stay open until all tests pass.";
+      }
     } else {
       updateActionCard(data.command);
     }
@@ -1317,9 +1517,29 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     });
   }
 
+  async function refreshWorkspaceState() {
+    try {
+      const res = await authFetch("/console/bootstrap");
+      if (!res.ok) return;
+      const data = await res.json();
+      consoleData = data;
+      renderStatusbar(data.status_counts || {}, data.workspace.connected);
+      renderIncidents(data.incidents || [], data.workspace.connected);
+      renderIncidentHeader(data);
+      renderActionCard(data);
+      renderMetrics(data.metrics || [], data.workspace);
+      renderArtifacts(data.artifacts || []);
+    } catch (e) {
+      console.error("workspace refresh failed", e);
+    }
+  }
+
   async function processVoiceResponse(data) {
     addUserMessage(data.transcript, true);
     renderAgentResponse(data);
+    if (data.orchestrator_result && data.orchestrator_result.executed) {
+      await refreshWorkspaceState();
+    }
     hideThinking();
     pttState.innerHTML = '<i class="ph ph-check" style="color:var(--ok)"></i> Done';
     pttTrans.textContent = data.transcript;

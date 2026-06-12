@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.auth.dependencies import get_current_user, require_permission
 from app.auth.models import UserPublic
@@ -23,7 +24,7 @@ async def process_audio(
     session_id: str = Form(default="default"),
     incident_context: str = Form(default="{}"),
     include_tts: str = Form(default="false"),
-    _user: UserPublic = Depends(require_permission("voice:use")),
+    user: UserPublic = Depends(require_permission("voice:use")),
 ) -> VoiceProcessResponse:
     """Push-to-talk endpoint: upload audio, get normalized command + enriched context."""
     import json
@@ -45,6 +46,7 @@ async def process_audio(
             filename=audio.filename or "audio.wav",
             incident_context=ctx,
             include_tts=use_tts,
+            user_id=user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -55,7 +57,7 @@ async def process_audio(
 @router.post("/process-text", response_model=VoiceProcessResponse)
 async def process_text(
     body: VoiceProcessRequest,
-    _user: UserPublic = Depends(require_permission("voice:use")),
+    user: UserPublic = Depends(require_permission("voice:use")),
 ) -> VoiceProcessResponse:
     """Process pre-transcribed text (useful for testing or text fallback)."""
     try:
@@ -64,9 +66,33 @@ async def process_text(
             session_id=body.session_id,
             incident_context=body.incident_context,
             include_tts=body.include_tts,
+            user_id=user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/process-text-stream")
+async def process_text_stream(
+    body: VoiceProcessRequest,
+    user: UserPublic = Depends(require_permission("voice:use")),
+) -> StreamingResponse:
+    """SSE endpoint: streams step/output/diff events then a final 'done' event."""
+
+    async def _gen():
+        async for chunk in get_pipeline().process_text_stream(
+            body.text,
+            session_id=body.session_id,
+            incident_context=body.incident_context,
+            user_id=user.id,
+        ):
+            yield chunk
+
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.delete("/sessions/{session_id}")

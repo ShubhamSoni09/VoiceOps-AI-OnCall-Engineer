@@ -131,6 +131,24 @@ def validate_command(command: str) -> None:
             )
 
 
+async def arun_command_streaming(command: str, *, configured: str | None = None):
+    """Async generator. Yields {"type":"line","text":...} then {"type":"exit","code":N}."""
+    import asyncio as _asyncio
+
+    validate_command(command)
+    root = get_workspace_root(configured)
+    proc = await _asyncio.create_subprocess_shell(
+        command,
+        stdout=_asyncio.subprocess.PIPE,
+        stderr=_asyncio.subprocess.STDOUT,
+        cwd=str(root),
+    )
+    async for raw in proc.stdout:
+        yield {"type": "line", "text": raw.decode("utf-8", errors="replace")}
+    await proc.wait()
+    yield {"type": "exit", "code": proc.returncode}
+
+
 def run_command(command: str, *, configured: str | None = None, timeout: int = 120) -> dict:
     validate_command(command)
     root = get_workspace_root(configured)

@@ -1,8 +1,15 @@
 import os
+import re
 import subprocess
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+from app.console.mock_data import (
+    build_sandbox_mock_artifacts,
+    build_sandbox_mock_incidents,
+    build_sandbox_mock_metrics,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
@@ -99,29 +106,60 @@ def get_workspace_info(configured: str | None) -> WorkspaceInfo:
 
 
 def build_integrations(workspace: WorkspaceInfo) -> list[IntegrationStatus]:
-    if not workspace.connected:
-        return [
-            IntegrationStatus(id="github", label="GitHub", connected=False, detail="No repo connected"),
-            IntegrationStatus(id="mcp", label="MCP workspace", connected=False, detail="Set VOICEOPS_WORKSPACE"),
-            IntegrationStatus(id="render", label="Render", connected=False),
-            IntegrationStatus(id="clickhouse", label="ClickHouse", connected=False),
-            IntegrationStatus(id="slack", label="Slack / PagerDuty", connected=False),
-        ]
+    on_render = bool(os.environ.get("RENDER"))
 
     return [
         IntegrationStatus(
-            id="github",
-            label="GitHub",
-            connected=workspace.is_git_repo,
-            detail=workspace.remote_url or "Local git repo",
+            id="workspace",
+            label="Workspace",
+            connected=workspace.connected,
+            detail=workspace.name if workspace.connected else "Set VOICEOPS_WORKSPACE",
         ),
         IntegrationStatus(
-            id="mcp",
-            label="MCP workspace",
-            connected=True,
-            detail=workspace.name,
+            id="render",
+            label="Render",
+            connected=on_render,
+            detail="Hosted on Render" if on_render else "Not configured",
         ),
-        IntegrationStatus(id="render", label="Render", connected=False, detail="Not configured"),
         IntegrationStatus(id="clickhouse", label="ClickHouse", connected=False, detail="Not configured"),
         IntegrationStatus(id="slack", label="Slack / PagerDuty", connected=False, detail="Not configured"),
     ]
+
+
+def _app_source(workspace: WorkspaceInfo) -> str:
+    if not workspace.path:
+        return ""
+    app_py = Path(workspace.path) / "app.py"
+    if not app_py.is_file():
+        return ""
+    try:
+        return app_py.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+
+
+def run_pytest_status(workspace: WorkspaceInfo) -> tuple[bool, int]:
+    """Return (all_tests_pass, failing_test_count)."""
+    if not workspace.path:
+        return False, 4
+    root = Path(workspace.path)
+    if not root.is_dir():
+        return False, 4
+    try:
+        result = subprocess.run(
+            ["python", "-m", "pytest", "-q", "--tb=no"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=90,
+        )
+        combined = result.stdout + result.stderr
+        if result.returncode == 0:
+            return True, 0
+        match = re.search(r"^([\.FEx]+)\s*\[", combined, re.MULTILINE)
+        if match:
+            return False, match.group(1).count("F")
+        failed = len(re.findall(r"^FAILED\s+", combined, re.MULTILINE))
+        return False, failed or 1
+    except (OSError, subprocess.TimeoutExpired):
+        return False, 4

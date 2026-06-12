@@ -13,11 +13,49 @@ import {
   fetchBootstrap,
   getToken,
   incidentContextFromBootstrap,
-  processText,
+  processTextStream,
 } from './api.js'
 
 function clockNow() {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+// Preferred voice names in order — first match wins.
+// Browser loads voices async; we pick on first call and cache.
+const PREFERRED_VOICES = [
+  'Google UK English Female',
+  'Microsoft Sonia Online (Natural) - English (United Kingdom)',
+  'Microsoft Aria Online (Natural) - English (United States)',
+  'Karen',           // macOS
+  'Samantha',        // macOS fallback
+]
+let _pinnedVoice = null
+
+function pickVoice() {
+  if (_pinnedVoice) return _pinnedVoice
+  const voices = window.speechSynthesis?.getVoices() || []
+  for (const name of PREFERRED_VOICES) {
+    const v = voices.find((v) => v.name === name)
+    if (v) { _pinnedVoice = v; return v }
+  }
+  // last resort: first English voice
+  return voices.find((v) => v.lang.startsWith('en')) || null
+}
+
+function speak(text) {
+  if (!text || !window.speechSynthesis) return
+  window.speechSynthesis.cancel()
+  const utt = new SpeechSynthesisUtterance(text)
+  const voice = pickVoice()
+  if (voice) utt.voice = voice
+  utt.rate = 1.05
+  utt.pitch = 1.0
+  window.speechSynthesis.speak(utt)
+}
+
+// Voices load async on page load — cache them when ready
+if (window.speechSynthesis) {
+  window.speechSynthesis.onvoiceschanged = () => { _pinnedVoice = null; pickVoice() }
 }
 
 export default function App() {
@@ -28,7 +66,7 @@ export default function App() {
   const [steps, setSteps] = useState(IDLE_STEPS)
   const [messages, setMessages] = useState([])
   const [artifacts, setArtifacts] = useState([])
-  const [actionDone, setActionDone] = useState('')
+  const [actionState, setActionState] = useState({ message: '', allTestsPass: false })
   const [listening, setListening] = useState(false)
   const [pttPhase, setPttPhase] = useState('idle')
   const [transcript, setTranscript] = useState(null)
@@ -43,6 +81,7 @@ export default function App() {
     try {
       const data = await fetchBootstrap()
       setBootstrap(data)
+      setArtifacts(data.artifacts || [])
       setArtifacts(data.artifacts || [])
       setLoadError('')
     } catch (err) {
@@ -73,7 +112,6 @@ export default function App() {
   async function sendUtterance(text, fromVoice = true) {
     if (!text?.trim() || processing) return
     setProcessing(true)
-    setThinking('Working on your request')
     setPttPhase('captured')
     setTranscript(text)
 
@@ -86,32 +124,95 @@ export default function App() {
       fromVoice,
     })
 
-    try {
-      const data = await processText(text, sessionId, incidentContextFromBootstrap(bootstrap))
-      let html = `<p>${escapeHtml(data.response_text || '')}</p>`
-      const orch = data.orchestrator_result
-      if (orch?.files_changed?.length) {
-        html += orch.files_changed.map((f) => `<div class="finding">Updated <b>${escapeHtml(f)}</b> in sandbox</div>`).join('')
-      }
-      pushMsg({
+    // Reserve a slot for the live agent message
+    idRef.current += 1
+    const agentMsgId = idRef.current
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: agentMsgId,
         role: 'agent',
         name: 'VoiceOps',
-        role2: `${data.intent?.action || 'agent'}`,
+        role2: 'agent',
         when: clockNow(),
+        html: '',
+        liveStep: 'Understanding command…',
+        liveOutput: '',
+        diff: null,
+        commandOutput: null,
+        pending: true,
+      },
+    ])
+
+    function patchMsg(patch) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === agentMsgId ? { ...m, ...patch } : m)),
+      )
+    }
+
+    let outputBuf = ''
+
+    try {
+      const data = await processTextStream(
+        text,
+        sessionId,
+        incidentContextFromBootstrap(bootstrap),
+        (event) => {
+          if (event.type === 'step') {
+            setThinking(event.label)
+            patchMsg({ liveStep: event.label })
+          } else if (event.type === 'output') {
+            outputBuf += event.chunk
+            patchMsg({ liveOutput: outputBuf })
+          } else if (event.type === 'diff') {
+            patchMsg({ diff: event.text })
+          }
+        },
+      )
+
+      const orch = data?.orchestrator_result
+      let html = `<p>${escapeHtml(data?.response_text || '')}</p>`
+      if (orch?.files_changed?.length) {
+        html += orch.files_changed
+          .map((f) => `<div class="finding">Updated <b>${escapeHtml(f)}</b> in sandbox</div>`)
+          .join('')
+      }
+
+      patchMsg({
+        role2: data?.intent?.action || 'agent',
         html,
+        liveStep: null,
+        liveOutput: null,
+        pending: false,
+        diff: orch?.diff || null,
+        commandOutput: orch?.command_output || null,
       })
+
+      speak(data?.response_text || '')
+
       if (orch?.artifacts?.length) {
         setArtifacts((prev) => [...orch.artifacts, ...prev])
       }
-      if (orch?.executed) setActionDone(data.response_text || 'Workspace action completed')
-      highlightStepper(data.command?.action)
+      if (orch?.executed) {
+        setActionState({
+          message: data.response_text || (orch.all_tests_pass
+            ? 'All tests passing — incidents resolved'
+            : 'Patch applied — incidents stay open until all tests pass'),
+          allTestsPass: !!orch.all_tests_pass,
+        })
+      }
+      highlightStepper(data?.command?.action)
+      if (orch?.executed) {
+        const refreshed = await fetchBootstrap()
+        setBootstrap(refreshed)
+        setArtifacts(refreshed.artifacts || [])
+      }
     } catch (err) {
-      pushMsg({
-        role: 'agent',
-        name: 'VoiceOps',
-        role2: 'error',
-        when: clockNow(),
+      patchMsg({
         html: `<p>Sorry, I hit an error: <b>${escapeHtml(err.message)}</b></p>`,
+        liveStep: null,
+        liveOutput: null,
+        pending: false,
       })
     } finally {
       setThinking('')
@@ -217,14 +318,17 @@ export default function App() {
         />
 
         <section className="center">
-          <IncidentHeader workspace={bootstrap?.workspace} user={bootstrap?.user} />
+          <IncidentHeader
+            workspace={bootstrap?.workspace}
+            user={bootstrap?.user}
+          />
           <Stepper steps={steps} />
-          <Feed messages={messages} thinking={thinking} workspace={bootstrap?.workspace} />
+          <Feed messages={messages} workspace={bootstrap?.workspace} />
         </section>
 
         <RightRail
           workspace={bootstrap?.workspace}
-          actionDone={actionDone}
+          actionState={actionState}
           artifacts={artifacts}
           metrics={bootstrap?.metrics}
         />

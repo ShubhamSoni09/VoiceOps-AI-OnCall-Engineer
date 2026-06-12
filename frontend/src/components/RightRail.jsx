@@ -5,6 +5,7 @@ import {
   ListMagnifyingGlass,
   BookOpenText,
   ArrowUpRight,
+  WarningCircle,
 } from '@phosphor-icons/react'
 
 const ARTIFACT_ICON = {
@@ -14,18 +15,27 @@ const ARTIFACT_ICON = {
   runbook: BookOpenText,
 }
 
-export default function RightRail({ workspace, actionDone, artifacts, metrics }) {
+export default function RightRail({ workspace, actionState, artifacts, metrics }) {
   const ws = workspace || {}
+  const message = actionState?.message || ''
+  const allTestsPass = !!actionState?.allTestsPass
 
   return (
     <aside className="rail rail--right">
       <div className="scroll">
         <div>
           <p className="section-lab">Awaiting your call</p>
-          <div className={`action${actionDone ? ' resolved' : ''}`}>
+          <div className={`action${message && allTestsPass ? ' resolved' : ''}`}>
             <div className="ah">
-              <span className="ribbon"><span className="lvdot" />STANDING BY</span>
-              <h3>Waiting for a voice command</h3>
+              <span className="ribbon">
+                <span className="lvdot" />
+                {message ? (allTestsPass ? 'DONE' : 'IN PROGRESS') : 'STANDING BY'}
+              </span>
+              <h3>
+                {message
+                  ? (allTestsPass ? 'All tests passing — incidents resolved' : 'Patch applied — tests still failing')
+                  : 'Waiting for a voice command'}
+              </h3>
             </div>
             <p className="sub">
               {ws.connected
@@ -33,14 +43,18 @@ export default function RightRail({ workspace, actionDone, artifacts, metrics })
                 : 'Set VOICEOPS_WORKSPACE in backend/.env to connect the MCP workspace.'}
             </p>
             <div className="preview mono">
-              <div className="row"><span className="k">repository</span><span className="v">{ws.remote_url || ws.name || 'not connected'}</span></div>
-              <div className="row"><span className="k">workspace</span><span className="v">{ws.name || '—'}</span></div>
-              <div className="row"><span className="k">status</span><span className="v">{ws.connected ? 'listening' : 'disconnected'}</span></div>
+              <div className="row"><span className="k">repository</span><span className="v">{ws.name || "sandbox"}</span></div>
+              <div className="row"><span className="k">workspace</span><span className="v">{ws.path ? ws.name : (ws.name || "—")}</span></div>
+              <div className="row"><span className="k">status</span><span className="v">{ws.connected ? "listening" : "disconnected"}</span></div>
             </div>
-            {actionDone && (
+            {message && (
               <div className="doneline">
-                <CheckCircle size={15} color="var(--ok)" />
-                {actionDone}
+                {allTestsPass ? (
+                  <CheckCircle size={15} color="var(--ok)" />
+                ) : (
+                  <WarningCircle size={15} color="var(--warn)" />
+                )}
+                {message}
               </div>
             )}
           </div>

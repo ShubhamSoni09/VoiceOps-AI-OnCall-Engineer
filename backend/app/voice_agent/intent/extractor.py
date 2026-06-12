@@ -152,7 +152,15 @@ class MockIntentExtractor(IntentExtractor):
 
     RULES: list[tuple[re.Pattern[str], VoiceIntent, IncidentAction]] = [
         (re.compile(r"\b(fix|patch|resolve|repair)\b", re.I), VoiceIntent.FIX_ISSUE, IncidentAction.PATCH),
-        (re.compile(r"\b(why|investigate|what'?s wrong|failing|down|error|incident)\b", re.I), VoiceIntent.INVESTIGATE_INCIDENT, IncidentAction.INVESTIGATE),
+        (
+            re.compile(
+                r"\b(why|investigate|what'?s wrong|what is the (issue|problem)|tell me about|explain the|describe the|"
+                r"failing|down|error|incident|issue|problem|bug|root cause)\b",
+                re.I,
+            ),
+            VoiceIntent.INVESTIGATE_INCIDENT,
+            IncidentAction.INVESTIGATE,
+        ),
         (re.compile(r"\b(deploy|ship|release|push to prod)\b", re.I), VoiceIntent.DEPLOY_SERVICE, IncidentAction.DEPLOY),
         (re.compile(r"\b(status|health|how is|is .+ up)\b", re.I), VoiceIntent.CHECK_STATUS, IncidentAction.STATUS),
         (re.compile(r"\b(rollback|revert)\b", re.I), VoiceIntent.ROLLBACK_DEPLOYMENT, IncidentAction.ROLLBACK),
@@ -178,6 +186,17 @@ class MockIntentExtractor(IntentExtractor):
                 break
 
         entities = _extract_entities(transcript, incident_context or {})
+        if intent == VoiceIntent.GENERAL_QUERY and incident_context:
+            lower = transcript.lower()
+            has_incident = bool(incident_context.get("incident_id") or incident_context.get("title"))
+            asks_about_issue = bool(
+                re.search(r"\b(issue|incident|problem|what|tell|explain|describe|wrong|broken)\b", lower)
+            )
+            if has_incident and asks_about_issue:
+                intent = VoiceIntent.INVESTIGATE_INCIDENT
+                action = IncidentAction.INVESTIGATE
+                confidence = 0.8
+
         result = ExtractedIntent(
             intent=intent,
             action=action,

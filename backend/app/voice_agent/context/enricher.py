@@ -11,7 +11,7 @@ class SessionMemory:
 
     def __init__(self, settings: Settings) -> None:
         self._max_turns = settings.context_window_turns
-        self._store_path = Path(settings.memory_store_path)
+        self._store_path = settings.memory_store_path_resolved
         self._sessions: dict[str, list[ConversationTurn]] = {}
         self._load()
 

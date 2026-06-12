@@ -60,6 +60,8 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   color: var(--crit); font-size: 13px;
 }
 .error.visible { display: block; }
+.error a { color: var(--accent); }
+.error code { font-family: "JetBrains Mono", monospace; font-size: 11px; background: var(--bg); padding: 2px 5px; border-radius: 4px; }
 .demo {
   margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);
   font-size: 12px; color: var(--ink-faint); line-height: 1.6;
@@ -68,6 +70,19 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   font-family: "JetBrains Mono", monospace; font-size: 11px;
   background: var(--bg); padding: 2px 6px; border-radius: 4px;
 }
+.divider {
+  display: flex; align-items: center; gap: 12px; margin: 18px 0 16px;
+  color: var(--ink-faint); font-size: 12px;
+}
+.divider::before, .divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--line);
+}
+.btn-github {
+  width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--elev); color: var(--ink); font-weight: 600; font-size: 14px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-github:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 </style>
 </head>
 <body>
@@ -78,8 +93,12 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
   </div>
   <div class="card">
     <h1>Sign in</h1>
-    <p>Access the incident console with your assigned role.</p>
+    <p>Sign in with GitHub to access your repository, or use a demo account.</p>
     <div class="error" id="error"></div>
+    <button type="button" class="btn-github" id="githubBtn">
+      <i class="ph ph-github-logo"></i> Continue with GitHub
+    </button>
+    <div class="divider">or email</div>
     <form id="loginForm">
       <label for="email">Email</label>
       <input id="email" name="email" type="email" autocomplete="username" required placeholder="priya@voiceops.dev" />
@@ -98,13 +117,41 @@ button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
 <script>
 (function () {
   const TOKEN_KEY = "voiceops_token";
+  const params = new URLSearchParams(location.search);
+  const tokenFromGithub = params.get("token");
+  if (tokenFromGithub) {
+    localStorage.setItem(TOKEN_KEY, tokenFromGithub);
+    location.replace(params.get("select_repo") === "1" ? "/dashboard?select_repo=1" : "/dashboard");
+    return;
+  }
   if (localStorage.getItem(TOKEN_KEY)) {
     location.replace("/dashboard");
     return;
   }
+  if (params.get("github") === "error") {
+    const reason = params.get("reason") || "GitHub sign-in failed";
+    const el = document.getElementById("error");
+    if (reason.toLowerCase().includes("not configured")) {
+      el.innerHTML = "<strong>GitHub OAuth is not configured.</strong><br><br>" +
+        "1. Open <a href=\"https://github.com/settings/developers\" target=\"_blank\" rel=\"noopener\">GitHub Developer Settings</a> → OAuth Apps → New.<br>" +
+        "2. Callback URL: <code>http://127.0.0.1:8001/auth/github/callback</code><br>" +
+        "3. Add <code>GITHUB_CLIENT_ID</code> and <code>GITHUB_CLIENT_SECRET</code> to <code>backend/.env</code>.<br>" +
+        "4. Restart the backend.";
+    } else {
+      el.textContent = reason;
+    }
+    el.classList.add("visible");
+    history.replaceState({}, "", "/login");
+  }
   const form = document.getElementById("loginForm");
   const errorEl = document.getElementById("error");
   const submitBtn = document.getElementById("submitBtn");
+  const githubBtn = document.getElementById("githubBtn");
+
+  githubBtn.addEventListener("click", function () {
+    errorEl.classList.remove("visible");
+    location.href = "/auth/github/login";
+  });
 
   form.addEventListener("submit", async function (e) {
     e.preventDefault();

@@ -16,7 +16,7 @@ async def login(
     store: UserStore = Depends(get_user_store),
 ) -> LoginResponse:
     user = store.get_by_email(body.email.strip())
-    if user is None or not verify_password(body.password, user.password_hash):
+    if user is None or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
     token = create_access_token(user, settings)

@@ -69,6 +69,33 @@ def workspace_settings(tmp_path, sandbox_workspace):
 
 
 @pytest.mark.asyncio
+async def test_orchestrator_investigate_nested_sandbox_repo(workspace_settings, tmp_path):
+    repo = tmp_path / "cloned-repo"
+    repo.mkdir()
+    sandbox = repo / "sandbox"
+    _write_sandbox(sandbox)
+
+    settings = workspace_settings.model_copy(update={"voiceops_workspace": str(repo)})
+    orchestrator = WorkspaceOrchestrator(settings)
+    command = NormalizedCommand(
+        intent=VoiceIntent.INVESTIGATE_INCIDENT,
+        action=IncidentAction.INVESTIGATE,
+        target="sandbox-api",
+        parameters={},
+        urgency="normal",
+        requires_approval=False,
+        original_transcript="what is the issue about",
+        normalized_text="Investigate sandbox-api",
+    )
+
+    result = await orchestrator.execute(command, "what is the issue about")
+
+    assert result is not None
+    assert result.executed is True
+    assert "health" in result.summary.lower() or "test" in result.summary.lower()
+
+
+@pytest.mark.asyncio
 async def test_orchestrator_investigate_runs_pytest(workspace_settings, sandbox_workspace):
     orchestrator = WorkspaceOrchestrator(workspace_settings)
     command = NormalizedCommand(
@@ -110,6 +137,17 @@ async def test_orchestrator_patch_adds_health_endpoint(workspace_settings):
     assert result.executed is True
     assert "app.py" in result.files_changed
     assert "pass" in result.summary.lower() or "tests now pass" in result.summary.lower()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_issue_question_investigates(workspace_settings):
+    pipeline = VoiceAgentPipeline(settings=workspace_settings)
+    result = await pipeline.process_text("what is the issue about", session_id="issue-q")
+
+    assert result.intent.intent == VoiceIntent.INVESTIGATE_INCIDENT
+    assert result.orchestrator_result is not None
+    assert result.orchestrator_result.executed is True
+    assert "investigated" in result.response_text.lower() or "test" in result.response_text.lower()
 
 
 @pytest.mark.asyncio

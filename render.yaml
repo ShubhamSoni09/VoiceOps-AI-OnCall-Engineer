@@ -1,0 +1,63 @@
+services:
+  # ── Backend: FastAPI (Python / Docker) ──────────────────────────────────────
+  - type: web
+    name: voiceops-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: voiceops-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: VOICEOPS_WORKSPACE
+        value: /data/workspace
+
+      # LLM / STT / TTS
+      - key: LLM_PROVIDER
+        value: openai
+      - key: STT_PROVIDER
+        value: whisper
+      - key: WHISPER_MODEL
+        value: tiny
+      - key: TTS_PROVIDER
+        value: openai
+      - key: TTS_ON_VOICE
+        value: "false"
+      - key: OPENAI_TTS_VOICE
+        value: shimmer
+
+      # CORS — set to your frontend Render URL once deployed
+      # e.g. https://voiceops-ui.onrender.com
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+      # Secrets
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+  # ── Frontend: React (Static Site) ───────────────────────────────────────────
+  - type: web
+    name: voiceops-ui
+    runtime: static
+    staticPublishPath: ./frontend/dist
+    buildCommand: cd frontend && npm ci && npm run build
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Set to the voiceops-api URL after first deploy
+      # e.g. https://voiceops-api.onrender.com
+      - key: VITE_API_URL
+        sync: false

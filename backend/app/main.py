@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -21,9 +20,11 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    import asyncio
+    settings = get_settings()
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
     if settings.stt_provider == "whisper":
         from app.voice_agent.stt.whisper import WhisperSTT
-
         stt = WhisperSTT(settings)
         await asyncio.to_thread(stt.preload)
     yield
@@ -36,9 +37,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_raw_origins = settings.allowed_origins or ""
+_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,49 +61,15 @@ async def root():
     login = DESIGN_DIR / "login.html"
     if login.exists():
         return FileResponse(login)
-    return {
-        "service": settings.app_name,
-        "docs": "/docs",
-        "login": "/login",
-        "dashboard": "/dashboard",
-    }
-
-
-@app.get("/login")
-async def login_page():
-    page = DESIGN_DIR / "login.html"
-    if page.exists():
-        return FileResponse(page)
-    return {"error": "Login page not found"}
-
-
-@app.get("/talk")
-async def talk():
-    index = STATIC_DIR / "index.html"
-    if index.exists():
-        return FileResponse(index)
-    return {"error": "Talk UI not found"}
-
-
-@app.get("/dashboard")
-async def dashboard():
-    page = DESIGN_DIR / "incident-dashboard.html"
-    if page.exists():
-        return FileResponse(page)
-    return {"error": "Dashboard UI not found", "expected": str(page)}
+    return {"service": settings.app_name, "docs": "/docs"}
 
 
 @app.get("/react")
 async def react_dashboard():
-    """Built React app — prefer `npm run dev` in frontend/ for development."""
     index = FRONTEND_DIST / "index.html"
     if index.exists():
         return FileResponse(index)
-    return {
-        "error": "React build not found",
-        "dev": "cd frontend && npm install && npm run dev  →  http://localhost:5191",
-        "html_dashboard": "/dashboard",
-    }
+    return {"error": "React build not found", "dev": "cd frontend && npm run dev"}
 
 
 @app.get("/health")

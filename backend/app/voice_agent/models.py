@@ -80,7 +80,10 @@ class OrchestratorResult(BaseModel):
     artifacts: list[dict[str, Any]] = Field(default_factory=list)
     files_changed: list[str] = Field(default_factory=list)
     command_output: str | None = None
+    diff: str | None = None
     pending_approval: bool = False
+    all_tests_pass: bool = False
+    pr_url: str | None = None
 
 
 class VoiceProcessRequest(BaseModel):

@@ -111,10 +111,10 @@ def build_test_summary(workspace_name: str, test_result: dict, *, app_source: st
     return " ".join(lines)
 
 
-def build_patch_summary(passed: bool, *, suggestion_used: bool = False) -> str:
+def build_patch_summary(passed: bool, *, change: str = "Updated app.py.") -> str:
     if passed:
-        return "I added GET /health to app.py and all tests now pass."
-    return "I updated app.py but some tests are still failing. Run investigate again for details."
+        return f"{change} All tests now pass."
+    return f"{change} Some tests are still failing — investigate again or try the next fix."
 
 
 def _detect_service_name(app_source: str | None) -> str | None:

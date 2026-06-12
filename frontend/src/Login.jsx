@@ -29,7 +29,7 @@ export default function Login({ onSuccess }) {
           <b>VoiceOps</b>
         </div>
         <h1>Sign in</h1>
-        <p className="sub">On-call console · voice commands to your repo</p>
+        <p className="sub">Enter your credentials to access the on-call console.</p>
         <label>
           Email
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />

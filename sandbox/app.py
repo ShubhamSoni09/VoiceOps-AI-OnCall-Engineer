@@ -1,4 +1,4 @@
-"""Simple checkout API — missing /health on purpose for agent testing."""
+"""checkout-api sandbox — intentional bugs for VoiceOps agent testing."""
 
 from fastapi import FastAPI
 
@@ -13,3 +13,13 @@ def root() -> dict[str, str]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+def metrics() -> dict[str, float]:
+    return {"error_rate": 0.47, "p99_latency_ms": 1840.0}
+
+
+@app.get("/v2/charge")
+def charge(amount: float) -> dict[str, str]:
+    return {"status": "charged", "amount": str(amount)}

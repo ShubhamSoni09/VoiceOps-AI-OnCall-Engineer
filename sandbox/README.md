@@ -1,40 +1,26 @@
 # VoiceOps sandbox workspace
 
-Small **checkout-api** demo with intentional bugs for agent testing:
+**checkout-api** demo with intentional bugs for agent testing:
 
-- `GET /v2/charge` — simulates 500s when a fake DB pool is exhausted
-- `GET /metrics` — returns error-rate style metrics
-- `GET /health` — **missing on purpose** (agent should add it; pytest fails until fixed)
-
-## Setup
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| Missing `/health` | `test_health` → 404 | Add `GET /health` returning `{"status": "ok"}` |
+| Missing `/v2/charge` | `test_charge_endpoint` → 404 | Add charge handler |
+| Wrong metrics schema | `test_metrics_schema` fails | Rename `error_rate_pct` → `error_rate` |
 
 ```bash
 cd sandbox
-python -m venv .venv
-.venv\Scripts\activate
 pip install -r requirements.txt
-pytest   # should fail until /health exists
+pytest   # 3 failures, 1 pass — until agent patches app.py
 ```
 
-## Connect MCP + dashboard
+## Voice commands to try
 
-Point both at this folder with the same env var:
+1. *"Investigate what's failing in sandbox"*
+2. *"Fix the health endpoint"*
+3. *"Fix the charge endpoint"*
+4. *"Fix the metrics schema"*
 
-| Component | Where |
-|-----------|--------|
-| Cursor MCP | `.cursor/mcp.json` → `"VOICEOPS_WORKSPACE": "sandbox"` |
-| Backend / dashboard | `backend/.env` → `VOICEOPS_WORKSPACE=sandbox` |
+## MCP + dashboard
 
-Use a relative path from the repo root (`sandbox`) or an absolute path to any other repo.
-
-Restart the backend after changing `.env`, then reload MCP in Cursor (**Settings → MCP → voiceops-workspace**).
-
-## Try agent actions (Cursor)
-
-Example prompts for the Cursor agent (it will use MCP tools: `read_file`, `write_file`, `run_command`, etc.):
-
-1. *"Use workspace_info and list what's in the sandbox."*
-2. *"Run pytest in sandbox and tell me what's failing."*
-3. *"Add a GET /health endpoint to sandbox/app.py so tests pass, then run pytest again."*
-
-Allowed shell commands in the workspace: `python`, `pytest`, `pip`, and read-only `git` (`status`, `diff`, `log`, `branch`, `show`).
+Set `VOICEOPS_WORKSPACE=sandbox` in `backend/.env` and `.cursor/mcp.json`.

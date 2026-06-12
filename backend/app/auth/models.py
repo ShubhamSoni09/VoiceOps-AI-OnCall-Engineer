@@ -28,7 +28,7 @@ class UserRecord(BaseModel):
     name: str
     initials: str
     role: Role
-    password_hash: str
+    password_hash: str = ""
 
 
 class UserPublic(BaseModel):

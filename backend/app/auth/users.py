@@ -64,3 +64,39 @@ class UserStore:
             if user.id == user_id:
                 return user
         return None
+
+    def get_by_github_id(self, github_id: int) -> UserRecord | None:
+        for user in self._users.values():
+            if user.github_id == github_id:
+                return user
+        return None
+
+    def upsert_github_user(self, profile: dict) -> UserRecord:
+        github_id = int(profile["id"])
+        existing = self.get_by_github_id(github_id)
+        if existing:
+            existing.name = str(profile.get("name") or profile.get("login") or existing.name)
+            self._persist()
+            return existing
+
+        login = str(profile.get("login") or f"user{github_id}")
+        name = str(profile.get("name") or login)
+        email = profile.get("email") or f"{github_id}+{login}@users.noreply.github.com"
+        initials = "".join(part[0].upper() for part in name.split()[:2]) or login[:2].upper()
+        record = UserRecord(
+            id=f"github-{github_id}",
+            email=email,
+            name=name,
+            initials=initials,
+            role=Role.ON_CALL,
+            password_hash="",
+            github_id=github_id,
+        )
+        self._users[record.email.lower()] = record
+        self._persist()
+        return record
+
+    def _persist(self) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"users": [user.model_dump() for user in self._users.values()]}
+        self._path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

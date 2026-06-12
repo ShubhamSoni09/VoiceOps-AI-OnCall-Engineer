@@ -160,6 +160,19 @@ See [`sandbox/README.md`](sandbox/README.md) for MCP prompt examples in Cursor.
 
 ---
 
+## Deploy on Render + GitHub PRs
+
+Full step-by-step guide: **[`docs/DEPLOY_RENDER.md`](docs/DEPLOY_RENDER.md)**
+
+Summary:
+
+1. Deploy via `render.yaml` (Docker + `/data` persistent disk)
+2. Set `GITHUB_REPO`, `GITHUB_DEPLOY_TOKEN`, and GitHub OAuth env vars
+3. Log in to the dashboard → **click GitHub** in integrations to connect
+4. Voice-fix your repo → when all tests pass, VoiceOps opens a PR you merge on GitHub
+
+---
+
 ## MCP tools
 
 | Tool | Description |
@@ -282,7 +295,8 @@ npm run build    # production build
 
 ## Roadmap
 
-- [ ] Deploy / PR approval flow wired to real GitHub + Render
+- [x] Render deployment + GitHub OAuth PR flow — see [`docs/DEPLOY_RENDER.md`](docs/DEPLOY_RENDER.md)
+- [ ] Deploy / PR approval flow wired to Render deploy hooks
 - [ ] Live incident + metrics feeds (PagerDuty, ClickHouse)
 - [ ] Composio MCP integrations (Slack, PagerDuty)
 - [ ] Production React build served from FastAPI

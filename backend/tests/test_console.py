@@ -1,28 +1,28 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth.users import UserStore
-from app.config import Settings, get_settings
 from app.auth.dependencies import get_user_store
+from app.config import Settings, get_settings
+from app.integrations.github.store import get_github_token_store
 from app.main import app
 
 
 @pytest.fixture
 def client(tmp_path):
-    users_path = tmp_path / "users.json"
-    store = UserStore(users_path)
+    get_settings.cache_clear()
+    get_user_store.cache_clear()
+    get_github_token_store.cache_clear()
 
     test_settings = Settings(
-        users_store_path=users_path,
+        data_dir=tmp_path,
         jwt_secret="test-secret-key",
-        memory_store_path=str(tmp_path / "memory.json"),
+        memory_store_path="memory.json",
         llm_provider="mock",
         tts_provider="mock",
         stt_provider="whisper",
         voiceops_workspace=None,
     )
 
-    app.dependency_overrides[get_user_store] = lambda: store
     app.dependency_overrides[get_settings] = lambda: test_settings
 
     with TestClient(app) as test_client:
@@ -59,11 +59,15 @@ def test_bootstrap_connected_workspace(client, tmp_path):
     workspace = tmp_path / "repo"
     workspace.mkdir()
     (workspace / "README.md").write_text("# Demo service\n", encoding="utf-8")
+    (workspace / "app.py").write_text(
+        'app = None\nmetrics = {"error_rate_pct": 1}\n',
+        encoding="utf-8",
+    )
 
     test_settings = Settings(
-        users_store_path=tmp_path / "users.json",
+        data_dir=tmp_path,
         jwt_secret="test-secret-key",
-        memory_store_path=str(tmp_path / "memory.json"),
+        memory_store_path="memory.json",
         llm_provider="mock",
         voiceops_workspace=str(workspace),
     )
@@ -77,5 +81,9 @@ def test_bootstrap_connected_workspace(client, tmp_path):
     data = res.json()
     assert data["workspace"]["connected"] is True
     assert data["workspace"]["name"] == "repo"
-    assert data["workspace"]["readme_line"] == "# Demo service"
+    assert len(data["incidents"]) == 4
+    assert data["status_counts"]["active"] == 3
+    assert data["status_counts"]["critical"] == 1
+    assert len(data["metrics"]) == 4
+    assert len(data["artifacts"]) >= 1
     assert any(i["id"] == "mcp" and i["connected"] for i in data["integrations"])
