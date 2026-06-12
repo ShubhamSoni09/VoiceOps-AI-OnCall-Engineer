@@ -1,0 +1,6 @@
+# local ruflo / tooling artifacts
+ruvector.db
+.claude/
+
+# os
+.DS_Store
