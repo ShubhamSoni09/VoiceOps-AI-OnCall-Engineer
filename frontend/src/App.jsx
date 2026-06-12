@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTheme } from './useTheme.js'
 import TopBar from './components/TopBar.jsx'
 import IncidentList from './components/IncidentList.jsx'
@@ -7,152 +7,172 @@ import Stepper from './components/Stepper.jsx'
 import Feed from './components/Feed.jsx'
 import RightRail from './components/RightRail.jsx'
 import PushToTalk from './components/PushToTalk.jsx'
-import { INITIAL_STEPS, SAMPLE_UTTERANCE, agentReplyFor } from './data.js'
+import Login from './Login.jsx'
+import { ACTION_INDEX, IDLE_STEPS } from './data.js'
+import {
+  fetchBootstrap,
+  getToken,
+  incidentContextFromBootstrap,
+  processText,
+} from './api.js'
+
+function clockNow() {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
 
 export default function App() {
   const { theme, toggle } = useTheme()
-
-  const [activeId, setActiveId] = useState('checkout')
-  const [steps, setSteps] = useState(INITIAL_STEPS)
+  const [authed, setAuthed] = useState(!!getToken())
+  const [bootstrap, setBootstrap] = useState(null)
+  const [loadError, setLoadError] = useState('')
+  const [steps, setSteps] = useState(IDLE_STEPS)
   const [messages, setMessages] = useState([])
-  const [agentStatus, setAgentStatus] = useState('await') // await | deploying | hold | idle
-  const [action, setAction] = useState({ status: 'pending', done: null }) // pending | approved | rejected
+  const [artifacts, setArtifacts] = useState([])
+  const [actionDone, setActionDone] = useState('')
   const [listening, setListening] = useState(false)
-  const [pttPhase, setPttPhase] = useState('idle') // idle | listening | captured
+  const [pttPhase, setPttPhase] = useState('idle')
   const [transcript, setTranscript] = useState(null)
+  const [thinking, setThinking] = useState('')
+  const [processing, setProcessing] = useState(false)
 
-  const listeningRef = useRef(false)
-  const timers = useRef([])
-  const capturedTimer = useRef(null)
-  const whenRef = useRef(51)
   const idRef = useRef(0)
+  const sessionId = bootstrap?.user?.id ? `voiceops-${bootstrap.user.id}` : 'voiceops-session'
+  const recognitionRef = useRef(null)
 
-  // clear every pending timeout on unmount
-  useEffect(
-    () => () => {
-      timers.current.forEach(clearTimeout)
-      clearTimeout(capturedTimer.current)
-    },
-    [],
-  )
+  const loadBootstrap = useCallback(async () => {
+    try {
+      const data = await fetchBootstrap()
+      setBootstrap(data)
+      setArtifacts(data.artifacts || [])
+      setLoadError('')
+    } catch (err) {
+      setLoadError(err.message || 'Failed to load console')
+    }
+  }, [])
 
-  function nextWhen() {
-    whenRef.current = whenRef.current >= 59 ? 50 : whenRef.current + 1
-    return '02:' + whenRef.current
-  }
+  useEffect(() => {
+    if (authed) loadBootstrap()
+  }, [authed, loadBootstrap])
 
   function pushMsg(msg) {
     idRef.current += 1
-    const id = idRef.current
-    setMessages((prev) => [...prev, { id, ...msg }])
+    setMessages((prev) => [...prev, { id: idRef.current, ...msg }])
   }
 
-  function addUserMessage(text) {
-    pushMsg({ role: 'user', name: 'Priya Nair', role2: 'on-call', when: nextWhen(), text })
-    const t = setTimeout(() => {
-      pushMsg({ role: 'agent', name: 'VoiceOps', role2: 'agent', when: nextWhen(), html: agentReplyFor(text) })
-    }, 700)
-    timers.current.push(t)
+  function highlightStepper(action) {
+    const idx = ACTION_INDEX[action] ?? 0
+    setSteps((prev) =>
+      prev.map((s, i) => {
+        if (i < idx) return { ...s, state: 'done' }
+        if (i === idx) return { ...s, state: 'active' }
+        return { ...s, state: '' }
+      }),
+    )
   }
 
-  function setStep(key, state) {
-    setSteps((prev) => prev.map((s) => (s.key === key ? { ...s, state } : s)))
+  async function sendUtterance(text, fromVoice = true) {
+    if (!text?.trim() || processing) return
+    setProcessing(true)
+    setThinking('Working on your request')
+    setPttPhase('captured')
+    setTranscript(text)
+
+    pushMsg({
+      role: 'user',
+      name: bootstrap?.user?.name || 'You',
+      role2: bootstrap?.user?.role_label || 'on-call',
+      when: clockNow(),
+      text,
+      fromVoice,
+    })
+
+    try {
+      const data = await processText(text, sessionId, incidentContextFromBootstrap(bootstrap))
+      let html = `<p>${escapeHtml(data.response_text || '')}</p>`
+      const orch = data.orchestrator_result
+      if (orch?.files_changed?.length) {
+        html += orch.files_changed.map((f) => `<div class="finding">Updated <b>${escapeHtml(f)}</b> in sandbox</div>`).join('')
+      }
+      pushMsg({
+        role: 'agent',
+        name: 'VoiceOps',
+        role2: `${data.intent?.action || 'agent'}`,
+        when: clockNow(),
+        html,
+      })
+      if (orch?.artifacts?.length) {
+        setArtifacts((prev) => [...orch.artifacts, ...prev])
+      }
+      if (orch?.executed) setActionDone(data.response_text || 'Workspace action completed')
+      highlightStepper(data.command?.action)
+    } catch (err) {
+      pushMsg({
+        role: 'agent',
+        name: 'VoiceOps',
+        role2: 'error',
+        when: clockNow(),
+        html: `<p>Sorry, I hit an error: <b>${escapeHtml(err.message)}</b></p>`,
+      })
+    } finally {
+      setThinking('')
+      setProcessing(false)
+      setTimeout(() => {
+        setPttPhase('idle')
+        setTranscript(null)
+      }, 2000)
+    }
   }
 
-  /* ---------- push to talk ---------- */
   function startListening() {
-    if (listeningRef.current) return
-    listeningRef.current = true
-    clearTimeout(capturedTimer.current)
-    setListening(true)
-    setPttPhase('listening')
+    if (processing) return
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (SR) {
+      const rec = new SR()
+      rec.continuous = false
+      rec.interimResults = true
+      rec.lang = 'en-US'
+      rec.onresult = (e) => {
+        const t = Array.from(e.results).map((r) => r[0].transcript).join('').trim()
+        setTranscript(t)
+        if (e.results[0].isFinal && t) sendUtterance(t, true)
+      }
+      rec.onerror = () => {
+        setListening(false)
+        setPttPhase('idle')
+      }
+      rec.onend = () => setListening(false)
+      recognitionRef.current = rec
+      rec.start()
+      setListening(true)
+      setPttPhase('listening')
+      return
+    }
+    const typed = window.prompt('Say your command (speech not supported in this browser):')
+    if (typed) sendUtterance(typed, false)
   }
 
   function stopListening() {
-    if (!listeningRef.current) return
-    listeningRef.current = false
+    recognitionRef.current?.stop()
     setListening(false)
-    setPttPhase('captured')
-    setTranscript(SAMPLE_UTTERANCE)
-    addUserMessage(SAMPLE_UTTERANCE)
-    capturedTimer.current = setTimeout(() => setPttPhase('idle'), 2600)
+    if (!processing) setPttPhase('idle')
   }
 
   function toggleMic() {
-    if (listeningRef.current) stopListening()
+    if (listening) stopListening()
     else startListening()
   }
 
-  /* ---------- approve / reject ---------- */
-  function onApprove() {
-    if (action.status !== 'pending') return
-    setAction({ status: 'approved', done: { icon: 'rocket', text: 'Deploying preview to Render…' } })
-    setAgentStatus('deploying')
-    setSteps((prev) =>
-      prev.map((s) =>
-        s.key === 'pr' ? { ...s, state: 'done' } : s.key === 'deploy' ? { ...s, state: 'active' } : s,
-      ),
-    )
-
-    const t1 = setTimeout(() => {
-      setSteps((prev) =>
-        prev.map((s) =>
-          s.key === 'deploy' ? { ...s, state: 'done' } : s.key === 'verify' ? { ...s, state: 'active' } : s,
-        ),
-      )
-      setAction({ status: 'approved', done: { icon: 'shield', text: 'Preview live · verifying health checks…' } })
-      pushMsg({
-        role: 'agent',
-        name: 'VoiceOps',
-        role2: 'agent',
-        when: nextWhen(),
-        html: 'Preview deployed to <b>checkout-api-preview.onrender.com</b>. Running health checks against /healthz, p99 and error-rate.',
-      })
-    }, 2200)
-
-    const t2 = setTimeout(() => {
-      setStep('verify', 'done')
-      setAction({
-        status: 'approved',
-        done: { icon: 'check', green: true, text: 'Verified · error rate 4.7% → 0.04%, p99 1,840ms → 210ms' },
-      })
-      // prototype parity: the tail row keeps showing "Deploying PR #482…" after verify
-      pushMsg({
-        role: 'agent',
-        name: 'VoiceOps',
-        role2: 'verified',
-        when: nextWhen(),
-        html: 'Fix verified on the preview. <b>Error rate 4.7% → 0.04%</b>, p99 <b>1,840ms → 210ms</b>. Ready to promote to prod whenever you give the word.',
-      })
-    }, 4600)
-
-    timers.current.push(t1, t2)
-  }
-
-  function onReject() {
-    if (action.status !== 'pending') return
-    setAction({ status: 'rejected', done: { icon: 'x', text: 'Rejected · agent will hold and suggest an alternative' } })
-    setAgentStatus('hold')
-  }
-
-  /* ---------- hold-space to talk (refs keep handlers fresh) ---------- */
-  const hRef = useRef({})
-  hRef.current.start = startListening
-  hRef.current.stop = stopListening
-  const spaceRef = useRef(false)
-
   useEffect(() => {
     const down = (e) => {
-      if (e.code === 'Space' && !spaceRef.current && e.target === document.body) {
+      if (e.code === 'Space' && e.target === document.body && !processing) {
         e.preventDefault()
-        spaceRef.current = true
-        hRef.current.start()
+        startListening()
       }
     }
     const up = (e) => {
-      if (e.code === 'Space' && spaceRef.current) {
-        spaceRef.current = false
-        hRef.current.stop()
+      if (e.code === 'Space') {
+        e.preventDefault()
+        stopListening()
       }
     }
     window.addEventListener('keydown', down)
@@ -161,25 +181,64 @@ export default function App() {
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [])
+  }, [processing, listening])
+
+  if (!authed) {
+    return <Login onSuccess={() => setAuthed(true)} />
+  }
+
+  if (loadError && !bootstrap) {
+    return (
+      <div className="login-wrap">
+        <div className="login-card">
+          <h1>Console unavailable</h1>
+          <p className="sub">{loadError}</p>
+          <p className="sub">Restart the backend on port 8001 and refresh.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={'app' + (listening ? ' listening' : '')}>
-      <TopBar theme={theme} onToggleTheme={toggle} />
+      <TopBar
+        theme={theme}
+        onToggleTheme={toggle}
+        user={bootstrap?.user}
+        statusCounts={bootstrap?.status_counts}
+        workspace={bootstrap?.workspace}
+      />
 
       <div className="body">
-        <IncidentList activeId={activeId} onSelect={setActiveId} />
+        <IncidentList
+          incidents={bootstrap?.incidents}
+          integrations={bootstrap?.integrations}
+          workspace={bootstrap?.workspace}
+        />
 
         <section className="center">
-          <IncidentHeader />
+          <IncidentHeader workspace={bootstrap?.workspace} user={bootstrap?.user} />
           <Stepper steps={steps} />
-          <Feed messages={messages} agentStatus={agentStatus} />
+          <Feed messages={messages} thinking={thinking} workspace={bootstrap?.workspace} />
         </section>
 
-        <RightRail action={action} onApprove={onApprove} onReject={onReject} />
+        <RightRail
+          workspace={bootstrap?.workspace}
+          actionDone={actionDone}
+          artifacts={artifacts}
+          metrics={bootstrap?.metrics}
+        />
       </div>
 
       <PushToTalk listening={listening} phase={pttPhase} transcript={transcript} onToggle={toggleMic} />
     </div>
   )
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }

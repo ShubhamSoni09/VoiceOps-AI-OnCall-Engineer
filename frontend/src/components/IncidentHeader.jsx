@@ -1,19 +1,36 @@
-export default function IncidentHeader() {
+export default function IncidentHeader({ workspace, user }) {
+  if (!workspace?.connected) {
+    return (
+      <div className="inc-header">
+        <div className="top">
+          <span className="sev-badge"><span className="dot" />STANDBY</span>
+          <span className="mono" style={{ fontSize: 12, color: 'var(--ink-faint)' }}>—</span>
+        </div>
+        <h1>No repository connected</h1>
+        <div className="inc-facts">
+          <div className="fact"><span className="k">Repository</span><span className="v mono">—</span></div>
+          <div className="fact"><span className="k">Branch</span><span className="v mono">—</span></div>
+          <div className="fact"><span className="k">On-call</span><span className="v">{user?.name || '—'}</span></div>
+          <div className="fact"><span className="k">Agent</span><span className="v">idle</span></div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="inc-header">
       <div className="top">
-        <span className="sev-badge act"><span className="dot" />SEV1 · ACTIVE</span>
+        <span className="sev-badge ok"><span className="dot" />READY</span>
         <span className="mono" style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
-          INC-2026-0612-04
+          {workspace.remote_url?.replace(/^https?:\/\//, '') || workspace.name}
         </span>
       </div>
-      <h1>checkout-api returning 500s on /v2/charge</h1>
+      <h1>{workspace.readme_line || `${workspace.name} workspace`}</h1>
       <div className="inc-facts">
-        <div className="fact"><span className="k">Service</span><span className="v mono">checkout-api</span></div>
-        <div className="fact"><span className="k">Started</span><span className="v">6 min ago · 02:47</span></div>
-        <div className="fact"><span className="k">Error rate</span><span className="v mono warnv">4.7%</span></div>
-        <div className="fact"><span className="k">Reporter</span><span className="v">PagerDuty P1</span></div>
-        <div className="fact"><span className="k">Agent</span><span className="v" style={{ color: 'var(--accent)' }}>working · step 5/7</span></div>
+        <div className="fact"><span className="k">Repository</span><span className="v mono">{workspace.name}</span></div>
+        <div className="fact"><span className="k">Branch</span><span className="v mono">{workspace.branch || '—'}</span></div>
+        <div className="fact"><span className="k">On-call</span><span className="v">{user?.name || '—'}</span></div>
+        <div className="fact"><span className="k">Agent</span><span className="v">idle</span></div>
       </div>
     </div>
   )

@@ -1,50 +1,55 @@
-import { GithubLogo, Cloud, Database, SlackLogo } from '@phosphor-icons/react'
-import { INCIDENTS, INTEGRATIONS } from '../data.js'
+import { GithubLogo, Cloud, Database, SlackLogo, Code, PlugsConnected } from '@phosphor-icons/react'
 
 const INTEG_ICON = {
   github: GithubLogo,
+  mcp: Code,
   render: Cloud,
   clickhouse: Database,
   slack: SlackLogo,
 }
 
-export default function IncidentList({ activeId, onSelect }) {
+export default function IncidentList({ incidents, integrations, workspace }) {
+  const open = (incidents || []).filter((i) => String(i.status || '').toLowerCase() !== 'resolved')
+
   return (
     <aside className="rail rail--left">
       <div className="rail-head">
         <h2>Incidents</h2>
-        <span className="count">3 open</span>
+        <span className="count">{open.length} open</span>
       </div>
 
       <div className="scroll" style={{ flex: 1 }}>
-        {INCIDENTS.map((inc) => (
-          <button
-            key={inc.id}
-            className={`inc${inc.live ? ' live' : ''}`}
-            aria-current={inc.id === activeId ? 'true' : undefined}
-            onClick={() => onSelect(inc.id)}
-          >
-            <span className={`sev ${inc.sev}`} />
-            <span className="inc-main">
-              <span className="inc-title">{inc.title}</span>
-              <span className="inc-meta">
-                <span className="mono svc">{inc.svc}</span>
-                <span className="inc-sev-tag">{inc.tag}</span>
+        {!workspace?.connected || open.length === 0 ? (
+          <div className="rail-empty">
+            <PlugsConnected size={28} color="var(--ink-ghost)" />
+            {workspace?.connected
+              ? 'No active incidents. Use voice commands to investigate your repository.'
+              : 'Connect a repository via MCP to see incidents here.'}
+          </div>
+        ) : (
+          open.map((inc, idx) => (
+            <button key={inc.id || idx} className={`inc${idx === 0 ? ' live' : ''}`} type="button">
+              <span className="sev act" />
+              <span className="inc-main">
+                <span className="inc-title">{inc.title}</span>
+                <span className="inc-meta">
+                  <span className="mono svc">{inc.service}</span>
+                  <span className="inc-sev-tag">{inc.severity || inc.status}</span>
+                </span>
               </span>
-            </span>
-            <span className="age">{inc.age}</span>
-          </button>
-        ))}
+            </button>
+          ))
+        )}
       </div>
 
       <div className="rail-foot">
-        {INTEGRATIONS.map((it) => {
-          const Icon = INTEG_ICON[it.id]
+        {(integrations || []).map((it) => {
+          const Icon = INTEG_ICON[it.id] || PlugsConnected
           return (
-            <div className="integ" key={it.id}>
+            <div className={`integ${it.connected ? '' : ' off'}`} key={it.id} title={it.detail || ''}>
               <Icon size={15} color="var(--ink-faint)" />
               {it.label}
-              <span className={`ind${it.on ? '' : ' off'}`} />
+              <span className="ind" />
             </div>
           )
         })}

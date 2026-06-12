@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8" />
@@ -298,8 +298,25 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 .step.active .lab { color: var(--accent); }
 
 /* ---- Conversation / log feed ---- */
-.feed { padding: 20px 22px 28px; display: flex; flex-direction: column; gap: 18px; }
+.feed { padding: 20px 22px 28px; display: flex; flex-direction: column; gap: 18px; min-height: 100%; }
 .feed-day { text-align: center; font-size: 11px; color: var(--ink-faint); position: relative; margin: 2px 0; }
+.feed-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 48px 24px; text-align: center; color: var(--ink-faint);
+}
+.feed-empty i { font-size: 2rem; color: var(--ink-ghost); }
+.feed-empty p { font-size: 14px; line-height: 1.5; max-width: 280px; }
+.feed-empty.hidden { display: none; }
+.rail-empty {
+  padding: 20px 14px; text-align: center; color: var(--ink-faint); font-size: 13px; line-height: 1.55;
+}
+.rail-empty i { font-size: 1.6rem; color: var(--ink-ghost); display: block; margin-bottom: 10px; }
+.panel-empty {
+  padding: 28px 22px; text-align: center; color: var(--ink-faint); font-size: 13px; line-height: 1.55;
+}
+.panel-empty i { font-size: 2rem; color: var(--ink-ghost); display: block; margin-bottom: 12px; }
+.integ.off .ind { background: var(--ink-ghost); box-shadow: none; }
+.statusbar.empty .pill { color: var(--ink-faint); }
 
 .msg { display: grid; grid-template-columns: 30px 1fr; gap: 12px; max-width: 760px; }
 .msg .gut { display: flex; flex-direction: column; align-items: center; }
@@ -472,11 +489,14 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   background: var(--bg-sunk); border: 1px solid var(--line); border-radius: 5px;
   padding: 2px 6px; color: var(--ink-dim);
 }
+.ptt.readonly { opacity: 0.55; pointer-events: none; }
+.ptt.readonly .ptt-hint { opacity: 0.7; }
 
 /* waveform */
 .wave { display: none; align-items: center; gap: 3px; height: 22px; margin-top: 4px; }
 .app.listening .wave { display: flex; }
-.app.listening .ptt-trans { display: none; }
+.ptt-trans .live-interim { color: var(--ink-faint); }
+.ptt-trans .live-placeholder { color: var(--ink-faint); font-size: 13px; }
 .wave i {
   display: block; width: 3px; height: 30%; border-radius: 2px; background: var(--accent);
   animation: wv 0.9s ease-in-out infinite;
@@ -520,10 +540,8 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
       <span class="tag">on-call console</span>
     </div>
 
-    <div class="statusbar">
-      <span class="pill crit"><span class="dot"></span>1 critical</span>
-      <span class="pill act"><span class="dot"></span>2 active</span>
-      <span class="pill ok"><span class="dot"></span>error budget 87.3%</span>
+    <div class="statusbar empty" id="statusbar">
+      <span class="pill" id="statusPill"><span class="dot"></span>No repo connected</span>
     </div>
 
     <div class="topright">
@@ -531,9 +549,12 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
         <i class="ph ph-moon-stars" id="themeIcon"></i>
       </button>
       <div class="oncall">
-        <span class="who"><small>on-call</small><span>Priya Nair</span></span>
-        <span class="avatar">PN</span>
+        <span class="who"><small id="userRole">on-call</small><span id="userName">—</span></span>
+        <span class="avatar" id="userAvatar">—</span>
       </div>
+      <button class="icon-btn" id="logoutBtn" title="Sign out" aria-label="Sign out">
+        <i class="ph ph-sign-out"></i>
+      </button>
     </div>
   </header>
 
@@ -544,69 +565,41 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     <aside class="rail rail--left">
       <div class="rail-head">
         <h2>Incidents</h2>
-        <span class="count">3 open</span>
+        <span class="count" id="incidentCount">0 open</span>
       </div>
-      <div class="scroll" style="flex:1">
-        <button class="inc live" aria-current="true" data-inc="checkout">
-          <span class="sev act"></span>
-          <span class="inc-main">
-            <span class="inc-title">5xx spike on checkout API</span>
-            <span class="inc-meta"><span class="mono svc">checkout-api</span><span class="inc-sev-tag">SEV1</span></span>
-          </span>
-          <span class="age">6m</span>
-        </button>
-
-        <button class="inc" data-inc="edge">
-          <span class="sev crit"></span>
-          <span class="inc-main">
-            <span class="inc-title">p99 latency breach, edge gateway</span>
-            <span class="inc-meta"><span class="mono svc">edge-gateway</span><span class="inc-sev-tag">SEV2</span></span>
-          </span>
-          <span class="age">23m</span>
-        </button>
-
-        <button class="inc" data-inc="payments">
-          <span class="sev ok"></span>
-          <span class="inc-main">
-            <span class="inc-title">Retry storm, payments worker</span>
-            <span class="inc-meta"><span class="mono svc">payments-worker</span><span class="inc-sev-tag">resolved</span></span>
-          </span>
-          <span class="age">2h</span>
-        </button>
+      <div class="scroll" style="flex:1" id="incidentList">
+        <div class="rail-empty" id="incidentEmpty">
+          <i class="ph ph-folder-open"></i>
+          Connect a repository via MCP to see incidents here.
+        </div>
       </div>
 
-      <div class="rail-foot">
-        <div class="integ"><i class="ph ph-github-logo"></i> GitHub <span class="ind"></span></div>
-        <div class="integ"><i class="ph ph-cloud"></i> Render <span class="ind"></span></div>
-        <div class="integ"><i class="ph ph-database"></i> ClickHouse <span class="ind"></span></div>
-        <div class="integ"><i class="ph ph-slack-logo"></i> Slack / PagerDuty <span class="ind"></span></div>
-      </div>
+      <div class="rail-foot" id="integrationsList"></div>
     </aside>
 
     <!-- ---------- CENTER : header + stepper + feed ---------- -->
     <section class="center">
-      <div class="inc-header">
+      <div class="inc-header" id="incHeader">
         <div class="top">
-          <span class="sev-badge act" id="hdrSev"><span class="dot"></span>SEV1 · ACTIVE</span>
-          <span class="mono" style="font-size:12px;color:var(--ink-faint)">INC-2026-0612-04</span>
+          <span class="sev-badge" id="hdrSev"><span class="dot"></span>STANDBY</span>
+          <span class="mono" style="font-size:12px;color:var(--ink-faint)" id="hdrIncidentId">—</span>
         </div>
-        <h1 id="hdrTitle">checkout-api returning 500s on /v2/charge</h1>
-        <div class="inc-facts">
-          <div class="fact"><span class="k">Service</span><span class="v mono">checkout-api</span></div>
-          <div class="fact"><span class="k">Started</span><span class="v">6 min ago · 02:47</span></div>
-          <div class="fact"><span class="k">Error rate</span><span class="v mono warnv">4.7%</span></div>
-          <div class="fact"><span class="k">Reporter</span><span class="v">PagerDuty P1</span></div>
-          <div class="fact"><span class="k">Agent</span><span class="v" style="color:var(--accent)">working · step 5/7</span></div>
+        <h1 id="hdrTitle">No repository connected</h1>
+        <div class="inc-facts" id="incFacts">
+          <div class="fact"><span class="k">Repository</span><span class="v mono" id="factRepo">—</span></div>
+          <div class="fact"><span class="k">Branch</span><span class="v mono" id="factBranch">—</span></div>
+          <div class="fact"><span class="k">On-call</span><span class="v" id="factOnCall">—</span></div>
+          <div class="fact"><span class="k">Agent</span><span class="v" id="factAgent">idle</span></div>
         </div>
       </div>
 
       <!-- stepper -->
       <div class="stepper" id="stepper">
-        <div class="step done"><span class="node"><i class="ph ph-check"></i></span><span class="lab">Investigate</span></div>
-        <div class="step done"><span class="node"><i class="ph ph-check"></i></span><span class="lab">Diagnose</span></div>
-        <div class="step done"><span class="node"><i class="ph ph-check"></i></span><span class="lab">Patch</span></div>
-        <div class="step done"><span class="node"><i class="ph ph-check"></i></span><span class="lab">Test</span></div>
-        <div class="step active" data-step="pr"><span class="node"><i class="ph ph-git-pull-request"></i></span><span class="lab">PR</span></div>
+        <div class="step" data-step="investigate"><span class="node"><i class="ph ph-magnifying-glass"></i></span><span class="lab">Investigate</span></div>
+        <div class="step" data-step="diagnose"><span class="node"><i class="ph ph-stethoscope"></i></span><span class="lab">Diagnose</span></div>
+        <div class="step" data-step="patch"><span class="node"><i class="ph ph-wrench"></i></span><span class="lab">Patch</span></div>
+        <div class="step" data-step="test"><span class="node"><i class="ph ph-flask"></i></span><span class="lab">Test</span></div>
+        <div class="step" data-step="pr"><span class="node"><i class="ph ph-git-pull-request"></i></span><span class="lab">PR</span></div>
         <div class="step" data-step="deploy"><span class="node"><i class="ph ph-rocket-launch"></i></span><span class="lab">Deploy</span></div>
         <div class="step" data-step="verify"><span class="node"><i class="ph ph-shield-check"></i></span><span class="lab">Verify</span></div>
       </div>
@@ -614,84 +607,21 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
       <!-- feed -->
       <div class="scroll" style="flex:1">
         <div class="feed" id="feed">
-          <div class="feed-day">Today · 02:47</div>
-
-          <!-- user voice query -->
-          <div class="msg user">
-            <div class="gut"><span class="ava"><i class="ph ph-user"></i></span></div>
-            <div>
-              <span class="name">Priya Nair<span class="role">on-call</span><span class="when">02:47</span></span>
-              <div class="text">Why is the checkout API throwing 500s? Pull the logs and tell me what changed.</div>
-              <div class="voicequote"><i class="ph ph-waveform"></i> transcribed from voice · 3.2s</div>
-            </div>
+          <div class="feed-empty" id="feedEmpty">
+            <i class="ph ph-chats-circle"></i>
+            <p id="feedEmptyText">Connect a repository, then hold <kbd style="padding:0.1rem 0.35rem;border:1px solid var(--line);border-radius:4px;">space</kbd> or tap the mic to talk to VoiceOps.</p>
           </div>
 
-          <!-- agent plan -->
-          <div class="msg agent">
-            <div class="gut"><span class="ava"><i class="ph ph-circuitry"></i></span></div>
-            <div>
-              <span class="name">VoiceOps<span class="role">agent</span><span class="when">02:47</span></span>
-              <div class="text">On it. Planning a 4-step investigation: pull recent <b>5xx logs</b>, diff the last deploy, check DB pool and latency, then propose a fix.</div>
-            </div>
-          </div>
-
-          <!-- agent log block -->
-          <div class="msg agent">
-            <div class="gut"><span class="ava"><i class="ph ph-circuitry"></i></span></div>
-            <div>
-              <span class="name">VoiceOps<span class="role">via Composio · ClickHouse</span><span class="when">02:48</span></span>
-              <div class="text">Last 200 errors on <b>checkout-api</b> cluster on one cause:</div>
-              <div class="block">
-                <div class="block-h"><i class="ph ph-list-magnifying-glass"></i> logs.query · checkout-api · last 5m <span class="src mono">187 matched</span></div>
-<pre class="mono"><span class="lk">02:47:12</span> <span class="lc">ERROR</span> charge_handler: <span class="lc">TimeoutError</span> acquiring db connection (waited 5001ms)
-<span class="lk">02:47:12</span> <span class="lc">ERROR</span> pool: HikariPool-1 - Connection is not available, request timed out
-<span class="lk">02:47:11</span> <span class="lw">WARN </span> pool: active=20 idle=0 waiting=64 max=20
-<span class="lk">02:47:09</span> <span class="lk">INFO </span> deploy: build a3f9c2 promoted to prod 11m ago</pre>
-              </div>
-            </div>
-          </div>
-
-          <!-- agent diagnosis -->
-          <div class="msg agent">
-            <div class="gut"><span class="ava"><i class="ph ph-circuitry"></i></span></div>
-            <div>
-              <span class="name">VoiceOps<span class="role">diagnosis</span><span class="when">02:49</span></span>
-              <div class="text">Root cause found. Deploy <b>a3f9c2</b> raised request concurrency but left the DB pool at <b>20</b>. The pool is exhausted, 64 requests are queued, every one times out at 5s.</div>
-              <div class="findings">
-                <div class="finding"><i class="ph ph-target"></i><span><b>Cause:</b> connection pool too small for new concurrency limit</span></div>
-                <div class="finding"><i class="ph ph-git-commit"></i><span><b>Introduced by:</b> <span class="mono">a3f9c2</span> "raise worker concurrency to 64" by m.bell</span></div>
-                <div class="finding"><i class="ph ph-wrench"></i><span><b>Fix:</b> raise <span class="mono">db.pool.max</span> 20 → 80, add 2s acquire timeout</span></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- agent patch / PR -->
-          <div class="msg agent">
-            <div class="gut"><span class="ava"><i class="ph ph-circuitry"></i></span></div>
-            <div>
-              <span class="name">VoiceOps<span class="role">patch · tests passed</span><span class="when">02:51</span></span>
-              <div class="text">Patched in a sandbox, lint + unit + a load smoke test all green. Opened <b>PR #482</b>:</div>
-              <div class="block">
-                <div class="block-h"><i class="ph ph-git-diff"></i> checkout-api/config/database.yml <span class="src mono">+3 -1</span></div>
-<pre class="mono"><span class="del">- pool:   { max: 20 }</span>
-<span class="add">+ pool:   { max: 80, acquire_timeout_ms: 2000 }</span>
-<span class="add">+ # autoscaled with worker concurrency (a3f9c2)</span></pre>
-              </div>
-            </div>
-          </div>
-
-          <!-- thinking -->
-          <div class="msg agent" id="thinkingRow">
+          <div class="msg agent" id="thinkingRow" style="display:none">
             <div class="gut"><span class="ava"><i class="ph ph-circuitry"></i></span></div>
             <div style="padding-top:5px">
               <span class="thinking">
-                <span class="orb"><i class="ph ph-rocket-launch"></i></span>
-                Ready to deploy a preview to Render. Waiting for your approval
+                <span class="orb"><i class="ph ph-cpu"></i></span>
+                Processing
                 <span class="dots"><span></span><span></span><span></span></span>
               </span>
             </div>
           </div>
-
         </div>
       </div>
     </section>
@@ -705,17 +635,16 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
           <p class="section-lab">Awaiting your call</p>
           <div class="action" id="actionCard">
             <div class="ah">
-              <span class="ribbon"><span class="lvdot"></span>AGENT PROPOSES</span>
-              <h3>Deploy preview of PR #482</h3>
+              <span class="ribbon"><span class="lvdot"></span>STANDING BY</span>
+              <h3>Waiting for a voice command</h3>
             </div>
-            <p class="sub">Spin up a Render preview env from the fix branch and run health checks before promoting to prod.</p>
-            <div class="preview mono">
-              <div class="row"><span class="k">branch</span><span class="v">fix/pool-exhaustion-482</span></div>
-              <div class="row"><span class="k">target</span><span class="v">render · checkout-api-preview</span></div>
-              <div class="row"><span class="k">checks</span><span class="v">/healthz · p99 · error-rate</span></div>
+            <p class="sub" id="actionSub">Connect a repository via MCP to start investigating with voice commands.</p>
+            <div class="preview mono" id="actionPreview">
+              <div class="row"><span class="k">repository</span><span class="v" id="actionRepo">not connected</span></div>
+              <div class="row"><span class="k">workspace</span><span class="v" id="actionWorkspace">—</span></div>
+              <div class="row"><span class="k">status</span><span class="v" id="actionStatus">disconnected</span></div>
             </div>
-            <div class="risk"><i class="ph ph-warning"></i> Preview only. Prod promote needs a second approval.</div>
-            <div class="acts">
+            <div class="acts" id="actionButtons" style="display:none">
               <button class="btn approve" id="approveBtn"><i class="ph ph-check-circle"></i> Approve</button>
               <button class="btn reject" id="rejectBtn"><i class="ph ph-x"></i> Reject</button>
             </div>
@@ -724,22 +653,19 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
         </div>
 
         <!-- context metrics -->
-        <div>
-          <p class="section-lab">checkout-api · live</p>
-          <div class="metrics">
-            <div class="metric"><div class="k">Error rate</div><div class="v bad">4.7<small>%</small></div><div class="delta up">▲ from 0.08%</div></div>
-            <div class="metric"><div class="k">p99 latency</div><div class="v warn">1,840<small>ms</small></div><div class="delta up">▲ 6.1×</div></div>
-            <div class="metric"><div class="k">Throughput</div><div class="v">312<small>req/s</small></div><div class="delta">stable</div></div>
-            <div class="metric"><div class="k">Error budget</div><div class="v">87.3<small>%</small></div><div class="delta down">▼ 9.4% today</div></div>
-          </div>
+        <div id="metricsSection" style="display:none">
+          <p class="section-lab" id="metricsLabel">Live metrics</p>
+          <div class="metrics" id="metricsGrid"></div>
         </div>
 
-        <!-- artifacts -->
         <div>
           <p class="section-lab">Artifacts</p>
-          <button class="artifact"><i class="ph ph-git-pull-request lead"></i><span class="af"><b>PR #482 · pool exhaustion fix</b><small>+3 -1 · checks passed</small></span><i class="ph ph-arrow-up-right go"></i></button>
-          <button class="artifact"><i class="ph ph-list-magnifying-glass lead"></i><span class="af"><b>Error logs · 187 lines</b><small>ClickHouse · last 5 min</small></span><i class="ph ph-arrow-up-right go"></i></button>
-          <button class="artifact"><i class="ph ph-book-open-text lead"></i><span class="af"><b>Runbook · DB pool exhaustion</b><small>matched 91% · last used Apr 3</small></span><i class="ph ph-arrow-up-right go"></i></button>
+          <div id="artifactsList">
+            <div class="panel-empty" id="artifactsEmpty">
+              <i class="ph ph-package"></i>
+              No artifacts yet. They will appear after the agent works on your repo.
+            </div>
+          </div>
         </div>
 
       </div>
@@ -747,13 +673,15 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   </div>
 
   <!-- ===================== PUSH TO TALK ===================== -->
-  <footer class="ptt">
+  <footer class="ptt" id="pttFooter">
     <button class="mic" id="micBtn" aria-label="Push to talk">
       <i class="ph ph-microphone" id="micIcon"></i>
     </button>
     <div class="ptt-mid">
       <div class="ptt-state" id="pttState"><i class="ph ph-waveform" style="font-size:14px"></i> Tap to talk to production</div>
-      <div class="ptt-trans" id="pttTrans">Ask anything: <span style="color:var(--ink-faint)">"deploy the fix", "what changed in the last hour", "roll back edge-gateway"</span></div>
+      <div class="ptt-trans" id="pttTrans">
+        <span class="live-placeholder">Ask anything — your words will appear here as you speak</span>
+      </div>
       <div class="wave" id="wave"></div>
     </div>
     <div class="ptt-hint">hold <kbd>space</kbd> to talk · <kbd>⌘K</kbd> commands</div>
@@ -762,11 +690,374 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
 </div>
 
 <script>
-(function () {
+(async function () {
   "use strict";
   const $ = (s, r) => (r || document).querySelector(s);
   const app = $("#app");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const TOKEN_KEY = "voiceops_token";
+  let currentUser = null;
+
+  function getToken() { return localStorage.getItem(TOKEN_KEY); }
+
+  function authHeaders() {
+    const token = getToken();
+    return token ? { Authorization: "Bearer " + token } : {};
+  }
+
+  async function authFetch(url, options) {
+    const opts = options || {};
+    opts.headers = Object.assign({}, opts.headers || {}, authHeaders());
+    const res = await fetch(url, opts);
+    if (res.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      location.href = "/";
+      throw new Error("Session expired");
+    }
+    return res;
+  }
+
+  async function requireAuth() {
+    if (!getToken()) {
+      location.href = "/";
+      return null;
+    }
+    const res = await authFetch("/auth/me");
+    if (!res.ok) {
+      localStorage.removeItem(TOKEN_KEY);
+      location.href = "/";
+      return null;
+    }
+    currentUser = await res.json();
+    return currentUser;
+  }
+
+  function applyUserToUI(user) {
+    const nameEl = $("#userName");
+    const roleEl = $("#userRole");
+    const avatarEl = $("#userAvatar");
+    if (nameEl) nameEl.textContent = user.name;
+    if (roleEl) roleEl.textContent = user.role_label;
+    if (avatarEl) avatarEl.textContent = user.initials;
+  }
+
+  function applyRolePermissions(user) {
+    const canVoice = user.permissions.indexOf("voice:use") >= 0;
+    const canApprove = user.permissions.indexOf("incident:approve") >= 0;
+    const pttFooter = $("#pttFooter");
+    if (!canVoice && pttFooter) {
+      pttFooter.classList.add("readonly");
+      const pttState = $("#pttState");
+      const pttTrans = $("#pttTrans");
+      if (pttState) pttState.textContent = "View-only role";
+      if (pttTrans) pttTrans.textContent = "You can monitor incidents but cannot send voice commands.";
+    }
+    const approveBtns = $("#actionButtons");
+    if (!canApprove && approveBtns) {
+      approveBtns.style.display = "none";
+    }
+    const mic = $("#micBtn");
+    if (!canVoice && mic) mic.disabled = true;
+  }
+
+  const user = await requireAuth();
+  if (!user) return;
+  applyUserToUI(user);
+  applyRolePermissions(user);
+
+  let consoleData = null;
+  let selectedIncident = null;
+  const SESSION_ID = "voiceops-" + (user.id || user.email || "session");
+
+  const INTEG_ICONS = {
+    github: "ph-github-logo",
+    mcp: "ph-code",
+    render: "ph-cloud",
+    clickhouse: "ph-database",
+    slack: "ph-slack-logo",
+  };
+
+  function formatAge(isoOrMins) {
+    if (typeof isoOrMins === "number") {
+      if (isoOrMins < 60) return isoOrMins + "m";
+      return Math.floor(isoOrMins / 60) + "h";
+    }
+    if (!isoOrMins) return "—";
+    const diff = Date.now() - new Date(isoOrMins).getTime();
+    const mins = Math.max(1, Math.floor(diff / 60000));
+    if (mins < 60) return mins + "m";
+    return Math.floor(mins / 60) + "h";
+  }
+
+  function sevClass(sev) {
+    const s = String(sev || "").toLowerCase();
+    if (s.indexOf("1") >= 0 || s === "critical" || s === "crit") return "crit";
+    if (s.indexOf("resolved") >= 0 || s === "ok") return "ok";
+    return "act";
+  }
+
+  function renderStatusbar(counts, connected) {
+    const bar = $("#statusbar");
+    if (!bar) return;
+    bar.innerHTML = "";
+    if (!connected) {
+      bar.classList.add("empty");
+      bar.innerHTML = '<span class="pill" id="statusPill"><span class="dot"></span>No repo connected</span>';
+      return;
+    }
+    bar.classList.remove("empty");
+    const crit = counts.critical || 0;
+    const act = counts.active || 0;
+    if (crit === 0 && act === 0) {
+      bar.innerHTML = '<span class="pill ok"><span class="dot"></span>All clear</span>';
+      return;
+    }
+    if (crit > 0) {
+      bar.innerHTML += '<span class="pill crit"><span class="dot"></span>' + crit + " critical</span>";
+    }
+    if (act > 0) {
+      bar.innerHTML += '<span class="pill act"><span class="dot"></span>' + act + " active</span>";
+    }
+  }
+
+  function renderIntegrations(integrations) {
+    const el = $("#integrationsList");
+    if (!el) return;
+    el.innerHTML = integrations.map(function (item) {
+      const icon = INTEG_ICONS[item.id] || "ph-plugs-connected";
+      const off = item.connected ? "" : " off";
+      const title = item.detail ? ' title="' + escapeHtml(item.detail) + '"' : "";
+      return '<div class="integ' + off + '"' + title + '><i class="ph ' + icon + '"></i> ' +
+        escapeHtml(item.label) + ' <span class="ind"></span></div>';
+    }).join("");
+  }
+
+  function renderIncidents(incidents, connected) {
+    const list = $("#incidentList");
+    const countEl = $("#incidentCount");
+    if (!list) return;
+
+    const open = incidents.filter(function (i) {
+      return String(i.status || "").toLowerCase() !== "resolved";
+    });
+    if (countEl) countEl.textContent = open.length + " open";
+
+    if (!connected || incidents.length === 0) {
+      list.innerHTML = '<div class="rail-empty" id="incidentEmpty">' +
+        '<i class="ph ph-folder-open"></i>' +
+        (connected
+          ? "No active incidents. Use voice commands to investigate your repository."
+          : "Connect a repository via MCP to see incidents here.") +
+        "</div>";
+      selectedIncident = null;
+      return;
+    }
+
+    list.innerHTML = incidents.map(function (inc, idx) {
+      const live = idx === 0 ? " live" : "";
+      const current = idx === 0 ? ' aria-current="true"' : "";
+      const sev = sevClass(inc.severity || inc.status);
+      return '<button class="inc' + live + '" data-inc-idx="' + idx + '"' + current + ">" +
+        '<span class="sev ' + sev + '"></span>' +
+        '<span class="inc-main">' +
+        '<span class="inc-title">' + escapeHtml(inc.title || "Untitled incident") + "</span>" +
+        '<span class="inc-meta"><span class="mono svc">' + escapeHtml(inc.service || "—") + "</span>" +
+        '<span class="inc-sev-tag">' + escapeHtml(inc.severity || inc.status || "—") + "</span></span>" +
+        "</span>" +
+        '<span class="age">' + formatAge(inc.started_at || inc.age_minutes) + "</span>" +
+        "</button>";
+    }).join("");
+
+    selectedIncident = incidents[0];
+    list.querySelectorAll(".inc").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        list.querySelectorAll(".inc").forEach(function (b) {
+          b.classList.remove("live");
+          b.removeAttribute("aria-current");
+        });
+        btn.classList.add("live");
+        btn.setAttribute("aria-current", "true");
+        const idx = parseInt(btn.getAttribute("data-inc-idx"), 10);
+        selectedIncident = incidents[idx];
+        renderIncidentHeader(consoleData);
+      });
+    });
+  }
+
+  function renderIncidentHeader(data) {
+    const ws = data.workspace;
+    const inc = selectedIncident;
+    const hdrSev = $("#hdrSev");
+    const hdrTitle = $("#hdrTitle");
+    const hdrIncidentId = $("#hdrIncidentId");
+    const factRepo = $("#factRepo");
+    const factBranch = $("#factBranch");
+    const factOnCall = $("#factOnCall");
+    const factAgent = $("#factAgent");
+
+    if (inc) {
+      const sev = String(inc.severity || "ACTIVE").toUpperCase();
+      hdrSev.className = "sev-badge " + sevClass(inc.severity);
+      hdrSev.innerHTML = '<span class="dot"></span>' + escapeHtml(sev);
+      hdrTitle.textContent = inc.title || "Incident";
+      hdrIncidentId.textContent = inc.id || "—";
+      if (factRepo) factRepo.textContent = inc.service || ws.name || "—";
+      if (factBranch) factBranch.textContent = inc.started_at ? formatAge(inc.started_at) + " ago" : "—";
+      if (factOnCall) factOnCall.textContent = data.user.name || "—";
+      if (factAgent) factAgent.textContent = inc.agent_status || "idle";
+      return;
+    }
+
+    if (!ws.connected) {
+      hdrSev.className = "sev-badge";
+      hdrSev.innerHTML = '<span class="dot"></span>STANDBY';
+      hdrTitle.textContent = "No repository connected";
+      hdrIncidentId.textContent = "—";
+      if (factRepo) factRepo.textContent = "—";
+      if (factBranch) factBranch.textContent = "—";
+      if (factOnCall) factOnCall.textContent = data.user.name || "—";
+      if (factAgent) factAgent.textContent = "idle";
+      return;
+    }
+
+    hdrSev.className = "sev-badge ok";
+    hdrSev.innerHTML = '<span class="dot"></span>READY';
+    hdrTitle.textContent = ws.readme_line || (ws.name + " workspace");
+    hdrIncidentId.textContent = ws.remote_url ? ws.remote_url.replace(/^https?:\/\//, "") : ws.name;
+    if (factRepo) factRepo.textContent = ws.name || "—";
+    if (factBranch) factBranch.textContent = ws.branch || "—";
+    if (factOnCall) factOnCall.textContent = data.user.name || "—";
+    if (factAgent) factAgent.textContent = "idle";
+  }
+
+  function renderActionCard(data) {
+    const ws = data.workspace;
+    const actionSub = $("#actionSub");
+    const actionRepo = $("#actionRepo");
+    const actionWorkspace = $("#actionWorkspace");
+    const actionStatus = $("#actionStatus");
+    const feedEmptyText = $("#feedEmptyText");
+
+    if (!ws.connected) {
+      if (actionSub) actionSub.textContent = "Set VOICEOPS_WORKSPACE in backend/.env to the same path as your MCP server.";
+      if (actionRepo) actionRepo.textContent = "not connected";
+      if (actionWorkspace) actionWorkspace.textContent = "—";
+      if (actionStatus) actionStatus.textContent = "disconnected";
+      if (feedEmptyText) {
+        feedEmptyText.innerHTML = "Connect a repository, then hold <kbd style=\"padding:0.1rem 0.35rem;border:1px solid var(--line);border-radius:4px;\">space</kbd> or tap the mic to talk to VoiceOps.";
+      }
+      return;
+    }
+
+    if (actionSub) {
+      actionSub.textContent = selectedIncident
+        ? "Ask VoiceOps to investigate, patch, deploy, or check status."
+        : "Repository connected. Hold space or tap the mic to start investigating.";
+    }
+    if (actionRepo) actionRepo.textContent = ws.remote_url || ws.name || "local";
+    if (actionWorkspace) actionWorkspace.textContent = ws.name || "—";
+    if (actionStatus) actionStatus.textContent = selectedIncident ? "incident active" : "listening";
+    if (feedEmptyText) {
+      feedEmptyText.innerHTML = "Hold <kbd style=\"padding:0.1rem 0.35rem;border:1px solid var(--line);border-radius:4px;\">space</kbd> or tap the mic to start talking to VoiceOps.";
+    }
+  }
+
+  function renderMetrics(metrics, workspace) {
+    const section = $("#metricsSection");
+    const grid = $("#metricsGrid");
+    const label = $("#metricsLabel");
+    if (!section || !grid) return;
+
+    if (!metrics || metrics.length === 0) {
+      section.style.display = "none";
+      grid.innerHTML = "";
+      return;
+    }
+
+    section.style.display = "";
+    if (label && workspace && workspace.name) {
+      label.textContent = workspace.name + " · live";
+    }
+    grid.innerHTML = metrics.map(function (m) {
+      const valClass = m.status === "bad" ? " bad" : m.status === "warn" ? " warn" : "";
+      const deltaClass = m.trend === "up" ? " up" : m.trend === "down" ? " down" : "";
+      const deltaPrefix = m.trend === "up" ? "▲ " : m.trend === "down" ? "▼ " : "";
+      return '<div class="metric"><div class="k">' + escapeHtml(m.label) + "</div>" +
+        '<div class="v' + valClass + '">' + escapeHtml(String(m.value)) +
+        (m.unit ? "<small>" + escapeHtml(m.unit) + "</small>" : "") + "</div>" +
+        (m.delta ? '<div class="delta' + deltaClass + '">' + deltaPrefix + escapeHtml(m.delta) + "</div>" : "") +
+        "</div>";
+    }).join("");
+  }
+
+  function renderArtifacts(artifacts) {
+    const list = $("#artifactsList");
+    if (!list) return;
+
+    if (!artifacts || artifacts.length === 0) {
+      list.innerHTML = '<div class="panel-empty" id="artifactsEmpty">' +
+        '<i class="ph ph-package"></i>' +
+        "No artifacts yet. They will appear after the agent works on your repo." +
+        "</div>";
+      return;
+    }
+
+    const icons = {
+      pr: "ph-git-pull-request",
+      logs: "ph-list-magnifying-glass",
+      runbook: "ph-book-open-text",
+    };
+    list.innerHTML = artifacts.map(function (a) {
+      const icon = icons[a.type] || "ph-file";
+      return '<button class="artifact" type="button"' + (a.url ? ' data-href="' + String(a.url).replace(/"/g, "&quot;") + '"' : "") + ">" +
+        '<i class="ph ' + icon + ' lead"></i>' +
+        '<span class="af"><b>' + escapeHtml(a.title) + "</b>" +
+        (a.subtitle ? "<small>" + escapeHtml(a.subtitle) + "</small>" : "") + "</span>" +
+        '<i class="ph ph-arrow-up-right go"></i></button>';
+    }).join("");
+    list.querySelectorAll(".artifact[data-href]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        window.open(btn.getAttribute("data-href"), "_blank", "noopener");
+      });
+    });
+  }
+
+  function renderConsole(data) {
+    consoleData = data;
+    renderStatusbar(data.status_counts || {}, data.workspace.connected);
+    renderIntegrations(data.integrations || []);
+    renderIncidents(data.incidents || [], data.workspace.connected);
+    renderIncidentHeader(data);
+    renderActionCard(data);
+    renderMetrics(data.metrics || [], data.workspace);
+    renderArtifacts(data.artifacts || []);
+    if (data.user) applyUserToUI(data.user);
+  }
+
+  async function loadConsole() {
+    try {
+      const res = await authFetch("/console/bootstrap");
+      if (!res.ok) {
+        const detail = res.status === 404
+          ? "Backend is outdated — restart uvicorn to load /console/bootstrap."
+          : ("Bootstrap failed (" + res.status + ")");
+        if ($("#hdrTitle")) $("#hdrTitle").textContent = "Console API unavailable";
+        if ($("#actionSub")) $("#actionSub").textContent = detail;
+        return;
+      }
+      renderConsole(await res.json());
+    } catch (e) {
+      console.error("console bootstrap failed", e);
+      if ($("#actionSub")) $("#actionSub").textContent = "Could not reach the console API. Is the backend running?";
+    }
+  }
+
+  await loadConsole();
+
+  $("#logoutBtn").addEventListener("click", function () {
+    localStorage.removeItem(TOKEN_KEY);
+    location.href = "/";
+  });
 
   /* ---------- theme ---------- */
   const root = document.documentElement;
@@ -795,105 +1086,522 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
     wave.appendChild(b);
   }
 
-  /* ---------- push to talk ---------- */
-  const micBtn = $("#micBtn");
-  const micIcon = $("#micIcon");
-  const pttState = $("#pttState");
-  const pttTrans = $("#pttTrans");
-  const SAMPLE = "Deploy the preview for PR 482 and watch the error rate.";
-  let listening = false, typer = null;
-
-  function startListening() {
-    if (listening) return;
-    listening = true;
-    app.classList.add("listening");
-    micIcon.className = "ph ph-stop";
-    pttState.innerHTML = '<span class="live">● Listening</span> · speak now, tap to stop';
-    pttTrans.innerHTML = '<span id="ttext"></span><span class="caret"></span>';
-    if (reduce) { $("#ttext").textContent = SAMPLE; return; }
-    const ttext = $("#ttext");
-    let i = 0;
-    typer = setInterval(() => {
-      ttext.textContent = SAMPLE.slice(0, ++i);
-      if (i >= SAMPLE.length) { clearInterval(typer); typer = null; }
-    }, 42);
-  }
-
-  function stopListening() {
-    if (!listening) return;
-    listening = false;
-    app.classList.remove("listening");
-    micIcon.className = "ph ph-microphone";
-    if (typer) { clearInterval(typer); typer = null; }
-    const said = ($("#ttext") && $("#ttext").textContent) || SAMPLE;
-    pttState.innerHTML = '<i class="ph ph-check" style="color:var(--ok)"></i> Captured · routing to agent';
-    pttTrans.textContent = said;
-    addUserMessage(said);
-    setTimeout(() => {
-      pttState.innerHTML = '<i class="ph ph-waveform" style="font-size:14px"></i> Tap to talk to production';
-    }, 2600);
-  }
-
-  micBtn.addEventListener("click", () => (listening ? stopListening() : startListening()));
-
-  // hold-space to talk
-  let spaceHeld = false;
-  addEventListener("keydown", (e) => {
-    if (e.code === "Space" && !spaceHeld && e.target === document.body) {
-      e.preventDefault(); spaceHeld = true; startListening();
-    }
-  });
-  addEventListener("keyup", (e) => {
-    if (e.code === "Space" && spaceHeld) { spaceHeld = false; stopListening(); }
-  });
-
-  /* ---------- feed helpers ---------- */
+  /* ---------- helpers ---------- */
   const feed = $("#feed");
+  const feedEmpty = $("#feedEmpty");
   const thinkingRow = $("#thinkingRow");
-  function now() { return "02:5" + (Math.floor((feed.children.length) % 9)); }
+  const card = $("#actionCard");
+  const doneline = $("#actionDone");
+  const actionButtons = $("#actionButtons");
+  const stepper = $("#stepper");
+
+  const ACTION_INDEX = {
+    investigate: 0, diagnose: 1, patch: 2, test: 3,
+    create_pr: 4, deploy: 5, verify: 6, rollback: 5, status: 0, unknown: 0,
+  };
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function clockNow() {
+    return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   function scrollFeed() { feed.parentElement.scrollTop = feed.parentElement.scrollHeight; }
 
-  function addUserMessage(text) {
+  function hideFeedEmpty() {
+    if (feedEmpty) feedEmpty.classList.add("hidden");
+  }
+
+  function ensureFeedDay() {
+    if ($("#feedDay")) return;
+    const day = document.createElement("div");
+    day.className = "feed-day";
+    day.id = "feedDay";
+    day.textContent = "Today · " + clockNow();
+    feed.insertBefore(day, thinkingRow);
+  }
+
+  function getIncidentContext() {
+    const ws = consoleData && consoleData.workspace ? consoleData.workspace : {};
+    const inc = selectedIncident;
+    if (inc) {
+      return {
+        incident_id: inc.id || null,
+        service: inc.service || ws.name || null,
+        title: inc.title || "",
+        severity: inc.severity || null,
+        workspace: ws.name || null,
+        branch: ws.branch || null,
+      };
+    }
+    return {
+      incident_id: null,
+      service: ws.name || null,
+      title: $("#hdrTitle") ? $("#hdrTitle").textContent : "",
+      severity: null,
+      workspace: ws.name || null,
+      branch: ws.branch || null,
+      repository_connected: !!ws.connected,
+    };
+  }
+
+  function setThinking(html) {
+    thinkingRow.style.display = "";
+    thinkingRow.querySelector(".thinking").innerHTML = html;
+  }
+
+  function hideThinking() {
+    thinkingRow.style.display = "none";
+  }
+
+  function addUserMessage(text, fromVoice) {
+    hideFeedEmpty();
+    ensureFeedDay();
     const el = document.createElement("div");
     el.className = "msg user";
     el.innerHTML =
       '<div class="gut"><span class="ava"><i class="ph ph-user"></i></span></div>' +
-      '<div><span class="name">Priya Nair<span class="role">on-call</span><span class="when">' + now() + '</span></span>' +
+      '<div><span class="name">' + escapeHtml(currentUser.name) + '<span class="role">' + escapeHtml(currentUser.role_label || "on-call") + '</span><span class="when">' + clockNow() + '</span></span>' +
       '<div class="text"></div>' +
-      '<div class="voicequote"><i class="ph ph-waveform"></i> transcribed from voice</div></div>';
+      (fromVoice ? '<div class="voicequote"><i class="ph ph-waveform"></i> transcribed from voice</div>' : "") +
+      '</div>';
     el.querySelector(".text").textContent = text;
     feed.insertBefore(el, thinkingRow);
     scrollFeed();
-    setTimeout(() => agentReply(text), 700);
+    return el;
   }
 
-  function addAgentMessage(html) {
+  function addAgentMessage(html, role) {
     const el = document.createElement("div");
     el.className = "msg agent";
     el.innerHTML =
       '<div class="gut"><span class="ava"><i class="ph ph-circuitry"></i></span></div>' +
-      '<div><span class="name">VoiceOps<span class="role">agent</span><span class="when">' + now() + '</span></span>' +
+      '<div><span class="name">VoiceOps<span class="role">' + escapeHtml(role || "agent") + '</span><span class="when">' + clockNow() + '</span></span>' +
       '<div class="text">' + html + '</div></div>';
     feed.insertBefore(el, thinkingRow);
     scrollFeed();
     return el;
   }
 
-  function agentReply(q) {
-    if (/deploy|preview|ship|482/i.test(q)) {
-      addAgentMessage('Understood. The deploy is queued and waiting on the approval card to your right. Approve it and I will run the health checks and report back.');
-    } else if (/roll ?back|revert/i.test(q)) {
-      addAgentMessage('I can roll back <b>edge-gateway</b> to the previous green build. That needs an approval too, prepping the action now.');
-    } else {
-      addAgentMessage('Looking into that now, pulling the relevant logs and metrics through Composio.');
+  let agentAudio = null;
+
+  function playSpeech(speech) {
+    if (!speech || !speech.text) return;
+    if (agentAudio) {
+      agentAudio.pause();
+      agentAudio = null;
+    }
+    if (speech.audio_base64) {
+      agentAudio = new Audio("data:" + (speech.mime_type || "audio/mpeg") + ";base64," + speech.audio_base64);
+      agentAudio.play().catch(function () {
+        speakWithBrowser(speech.text);
+      });
+      return;
+    }
+    speakWithBrowser(speech.text);
+  }
+
+  function speakWithBrowser(text) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(function (v) {
+      return /google|natural|samantha|jenny|aria/i.test(v.name);
+    });
+    if (preferred) utterance.voice = preferred;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function highlightStepper(action) {
+    const idx = ACTION_INDEX[action] ?? 0;
+    const steps = stepper.querySelectorAll(".step");
+    steps.forEach(function (step, i) {
+      step.classList.remove("active");
+      if (i < idx) {
+        step.classList.add("done");
+        step.querySelector(".node").innerHTML = '<i class="ph ph-check"></i>';
+      } else if (i === idx) {
+        step.classList.add("active");
+      }
+    });
+  }
+
+  function updateActionCard(command) {
+    const title = card.querySelector("h3");
+    const sub = card.querySelector(".sub");
+    const preview = card.querySelector(".preview");
+    const ribbon = card.querySelector(".ribbon");
+    if (!command.requires_approval) {
+      card.classList.add("resolved");
+      if (actionButtons) actionButtons.style.display = "none";
+      if (ribbon) ribbon.innerHTML = '<span class="lvdot"></span>READY';
+      doneline.innerHTML = '<i class="ph ph-check-circle" style="color:var(--ok)"></i> No approval required';
+      return;
+    }
+    card.classList.remove("resolved", "rejected");
+    doneline.textContent = "";
+    if (ribbon) ribbon.innerHTML = '<span class="lvdot"></span>AGENT PROPOSES';
+    if (actionButtons) actionButtons.style.display = "";
+    if (title) title.textContent = command.normalized_text;
+    if (sub) sub.textContent = "Review this action before the agent continues.";
+    if (preview) {
+      preview.innerHTML =
+        '<div class="row"><span class="k">intent</span><span class="v">' + escapeHtml(command.intent) + '</span></div>' +
+        '<div class="row"><span class="k">target</span><span class="v">' + escapeHtml(command.target || "—") + '</span></div>' +
+        '<div class="row"><span class="k">urgency</span><span class="v">' + escapeHtml(command.urgency) + '</span></div>';
     }
   }
 
-  /* ---------- approve / reject ---------- */
-  const card = $("#actionCard");
-  const doneline = $("#actionDone");
-  const stepper = $("#stepper");
+  function renderAgentResponse(data) {
+    const orch = data.orchestrator_result;
+    const steps = data.context && data.context.suggested_next_steps ? data.context.suggested_next_steps : [];
+    let html = "<p>" + escapeHtml(data.response_text || data.speech?.text || "") + "</p>";
+    if (orch && orch.command_output) {
+      html += '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--ink-faint)">Raw test output</summary>' +
+        '<pre class="mono" style="margin-top:8px;padding:10px;background:var(--surface-2);border-radius:8px;font-size:11px;white-space:pre-wrap;max-height:180px;overflow:auto">' +
+        escapeHtml(orch.command_output) + "</pre></details>";
+    }
+    if (steps.length && !(orch && orch.executed)) {
+      html += '<div class="findings">' + steps.map(function (s) {
+        return '<div class="finding"><i class="ph ph-arrow-right"></i><span>' + escapeHtml(s) + "</span></div>";
+      }).join("") + "</div>";
+    }
+    if (orch && orch.executed && orch.files_changed && orch.files_changed.length) {
+      html += '<div class="findings">' + orch.files_changed.map(function (f) {
+        return '<div class="finding"><i class="ph ph-file-code"></i><span>Updated <b>' + escapeHtml(f) + "</b> in sandbox</span></div>";
+      }).join("") + "</div>";
+      appendArtifacts(orch.artifacts || []);
+    }
+    addAgentMessage(html, data.intent.action + " · " + data.intent.intent);
+    highlightStepper(data.command.action);
+    if (orch && orch.executed) {
+      card.classList.add("resolved");
+      if (actionButtons) actionButtons.style.display = "none";
+      const ribbon = card.querySelector(".ribbon");
+      if (ribbon) ribbon.innerHTML = '<span class="lvdot"></span>DONE';
+      const title = card.querySelector("h3");
+      if (title) title.textContent = "Workspace action completed";
+      doneline.innerHTML = '<i class="ph ph-check-circle" style="color:var(--ok)"></i> ' + escapeHtml(data.response_text || "");
+    } else {
+      updateActionCard(data.command);
+    }
+    playSpeech(data.speech);
+  }
 
+  function appendArtifacts(artifacts) {
+    const list = $("#artifactsList");
+    if (!list || !artifacts.length) return;
+    const empty = $("#artifactsEmpty");
+    if (empty) empty.remove();
+    const icons = { pr: "ph-git-pull-request", logs: "ph-list-magnifying-glass", runbook: "ph-book-open-text" };
+    artifacts.forEach(function (a) {
+      const icon = icons[a.type] || "ph-package";
+      const btn = document.createElement("button");
+      btn.className = "artifact";
+      btn.type = "button";
+      btn.innerHTML =
+        '<i class="ph ' + icon + ' lead"></i>' +
+        '<span class="af"><b>' + escapeHtml(a.title || "Artifact") + "</b>" +
+        (a.subtitle ? "<small>" + escapeHtml(a.subtitle) + "</small>" : "") + "</span>" +
+        '<i class="ph ph-check go"></i>';
+      list.prepend(btn);
+    });
+  }
+
+  async function processVoiceResponse(data) {
+    addUserMessage(data.transcript, true);
+    renderAgentResponse(data);
+    hideThinking();
+    pttState.innerHTML = '<i class="ph ph-check" style="color:var(--ok)"></i> Done';
+    pttTrans.textContent = data.transcript;
+    setTimeout(function () {
+      pttState.innerHTML = '<i class="ph ph-waveform" style="font-size:14px"></i> Hold <kbd>space</kbd> or tap mic to talk';
+    }, 2400);
+  }
+
+  function beginProcessing(label) {
+    setThinking(
+      '<span class="orb"><i class="ph ph-cpu"></i></span> ' + label +
+      ' <span class="dots"><span></span><span></span><span></span></span>'
+    );
+    thinkingRow.style.display = "";
+    micBtn.disabled = true;
+  }
+
+  function handleBackendError(err) {
+    hideThinking();
+    pttState.innerHTML = '<span style="color:var(--crit)">Error</span> · ' + escapeHtml(err.message);
+    addAgentMessage("Sorry, I hit an error: <b>" + escapeHtml(err.message) + "</b>", "error");
+  }
+
+  async function sendTextToBackend(text) {
+    beginProcessing("Thinking");
+    pttState.innerHTML = '<span class="live">● Working</span> · agent responding';
+
+    try {
+      const res = await authFetch("/voice/process-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: text,
+          session_id: SESSION_ID,
+          incident_context: getIncidentContext(),
+          include_tts: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || res.statusText);
+      data.transcript = data.transcript || text;
+      await processVoiceResponse(data);
+    } catch (err) {
+      handleBackendError(err);
+    } finally {
+      micBtn.disabled = false;
+      processing = false;
+    }
+  }
+
+  async function sendToBackend(blob) {
+    beginProcessing("Transcribing");
+    pttState.innerHTML = '<span class="live">● Working</span> · transcribing + thinking';
+
+    const form = new FormData();
+    form.append("audio", blob, "recording.webm");
+    form.append("session_id", SESSION_ID);
+    form.append("incident_context", JSON.stringify(getIncidentContext()));
+    form.append("include_tts", "true");
+
+    try {
+      const res = await authFetch("/voice/process-audio", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || res.statusText);
+      await processVoiceResponse(data);
+    } catch (err) {
+      handleBackendError(err);
+    } finally {
+      micBtn.disabled = false;
+      processing = false;
+    }
+  }
+
+  /* ---------- push to talk (live backend) ---------- */
+  const micBtn = $("#micBtn");
+  const micIcon = $("#micIcon");
+  const pttState = $("#pttState");
+  const pttTrans = $("#pttTrans");
+  let listening = false;
+  let processing = false;
+  let spaceHeld = false;
+  let mediaRecorder = null;
+  let chunks = [];
+  let stream = null;
+  let speechRecognition = null;
+  let liveFinal = "";
+  let liveInterim = "";
+  let sentTextPath = false;
+
+  function isTypingTarget(el) {
+    return el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+  }
+
+  function resetTranscriptPlaceholder() {
+    pttTrans.innerHTML = '<span class="live-placeholder">Ask anything — your words will appear here as you speak</span>';
+  }
+
+  function updateLiveTranscript() {
+    const combined = (liveFinal + liveInterim).trim();
+    if (!combined) {
+      pttTrans.innerHTML = '<span class="live-interim">Listening…</span><span class="caret"></span>';
+      return;
+    }
+    pttTrans.innerHTML =
+      '<span class="live-final">' + escapeHtml(liveFinal) + '</span>' +
+      '<span class="live-interim">' + escapeHtml(liveInterim) + '</span>' +
+      '<span class="caret"></span>';
+  }
+
+  function createSpeechRecognition() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+    const recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.onresult = function (event) {
+      liveInterim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const piece = event.results[i][0].transcript;
+        if (event.results[i].isFinal) liveFinal += piece;
+        else liveInterim += piece;
+      }
+      updateLiveTranscript();
+    };
+    recognition.onerror = function (event) {
+      if (event.error !== "aborted" && event.error !== "no-speech") {
+        console.warn("speech recognition:", event.error);
+      }
+    };
+    return recognition;
+  }
+
+  function stopSpeechRecognition() {
+    return new Promise(function (resolve) {
+      if (!speechRecognition) {
+        resolve();
+        return;
+      }
+      const rec = speechRecognition;
+      speechRecognition = null;
+      rec.onend = function () { resolve(); };
+      try { rec.stop(); } catch (e) { resolve(); }
+    });
+  }
+
+  function getLiveTranscript() {
+    return (liveFinal + liveInterim).trim();
+  }
+
+  async function ensureMic() {
+    if (stream) return true;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      pttState.innerHTML = '<span style="color:var(--crit)">Mic unavailable</span>';
+      pttTrans.textContent = "Use Chrome or Edge on http://127.0.0.1:8001 (not a file:// URL).";
+      return false;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      pttState.innerHTML = '<i class="ph ph-waveform" style="font-size:14px"></i> Mic ready — hold <kbd>space</kbd> or tap mic';
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SR) resetTranscriptPlaceholder();
+      else pttTrans.textContent = "Microphone ready · live captions need Chrome or Edge";
+      return true;
+    } catch (err) {
+      const denied = err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
+        || /dismissed|denied|not allowed/i.test(err.message || "");
+      pttState.innerHTML = '<span style="color:var(--crit)">Microphone blocked</span>';
+      pttTrans.textContent = denied
+        ? "Click the lock/tune icon in the address bar → Site settings → Microphone → Allow. Then tap the mic button again."
+        : (err.message || "Could not access microphone");
+      return false;
+    }
+  }
+
+  function startListening() {
+    if (listening || processing || !stream) return;
+    listening = true;
+    sentTextPath = false;
+    liveFinal = "";
+    liveInterim = "";
+    chunks = [];
+    updateLiveTranscript();
+
+    speechRecognition = createSpeechRecognition();
+    if (speechRecognition) {
+      try { speechRecognition.start(); } catch (e) { speechRecognition = null; }
+    }
+
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus" : "audio/webm";
+    mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+    mediaRecorder.ondataavailable = function (e) {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    mediaRecorder.onstop = function () {
+      if (sentTextPath) return;
+      if (chunks.length === 0) {
+        pttState.innerHTML = '<span style="color:var(--warn)">No audio captured</span>';
+        resetTranscriptPlaceholder();
+        return;
+      }
+      processing = true;
+      const blob = new Blob(chunks, { type: chunks[0].type || "audio/webm" });
+      sendToBackend(blob);
+    };
+    mediaRecorder.start();
+    app.classList.add("listening");
+    micIcon.className = "ph ph-stop";
+    pttState.innerHTML = '<span class="live">● Listening</span> · speak now, release to send';
+  }
+
+  async function stopListening() {
+    if (!listening) return;
+    listening = false;
+    app.classList.remove("listening");
+    micIcon.className = "ph ph-microphone";
+
+    await stopSpeechRecognition();
+    const transcript = getLiveTranscript();
+    if (transcript) {
+      sentTextPath = true;
+      processing = true;
+      pttTrans.innerHTML = '<span class="live-final">' + escapeHtml(transcript) + '</span>';
+      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+      sendTextToBackend(transcript);
+      return;
+    }
+
+    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    else resetTranscriptPlaceholder();
+  }
+
+  micBtn.addEventListener("click", function () {
+    if (processing) return;
+    if (listening) { stopListening(); return; }
+    ensureMic().then(function (ok) { if (ok) startListening(); });
+  });
+
+  addEventListener("keydown", function (e) {
+    if (e.code !== "Space" || e.repeat || spaceHeld || processing) return;
+    if (isTypingTarget(e.target)) return;
+    e.preventDefault();
+    spaceHeld = true;
+    ensureMic().then(function (ok) {
+      if (!ok) { spaceHeld = false; return; }
+      startListening();
+    });
+  });
+  addEventListener("keyup", function (e) {
+    if (e.code !== "Space" || !spaceHeld) return;
+    e.preventDefault();
+    spaceHeld = false;
+    stopListening();
+  });
+  window.addEventListener("blur", function () {
+    if (!spaceHeld) return;
+    spaceHeld = false;
+    stopListening();
+  });
+
+  async function checkBackend() {
+    try {
+      const res = await fetch("/voice/health");
+      const data = await res.json();
+      if (!data.llm_ready) {
+        pttTrans.textContent = "Connected · set OPENAI_API_KEY in backend/.env for full LLM responses";
+      }
+    } catch (e) {
+      pttState.innerHTML = '<span style="color:var(--crit)">Backend offline</span>';
+      pttTrans.textContent = "Start the server: uvicorn app.main:app --reload";
+    }
+  }
+
+  if (user.permissions.indexOf("voice:use") >= 0) {
+    authFetch("/voice/sessions/" + SESSION_ID, { method: "DELETE" }).catch(function () {});
+    pttState.innerHTML = '<i class="ph ph-microphone" style="font-size:14px"></i> Tap mic to enable access';
+    pttTrans.textContent = "Your browser will ask for microphone permission when you tap the mic or hold space.";
+    checkBackend();
+  }
+
+  /* ---------- approve / reject (demo flow for deploy approval) ---------- */
   function advance(stepKey, state) {
     const s = stepper.querySelector('[data-step="' + stepKey + '"]');
     if (s) { s.classList.remove("active"); s.classList.add(state); }

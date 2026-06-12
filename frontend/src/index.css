@@ -477,3 +477,29 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; backgroun
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .wave i { height: 55%; }
 }
+
+.rail-empty, .panel-empty, .feed-empty {
+  padding: 24px 16px; text-align: center; color: var(--ink-faint); font-size: 13px; line-height: 1.55;
+}
+.feed-empty p { margin-top: 12px; }
+.integ.off .ind { background: var(--ink-ghost); box-shadow: none; }
+
+.login-wrap {
+  min-height: 100vh; display: grid; place-items: center; background: var(--bg);
+}
+.login-card {
+  width: min(400px, 92vw); padding: 32px; border: 1px solid var(--line); border-radius: 16px;
+  background: var(--surface); display: grid; gap: 14px;
+}
+.login-card h1 { font-size: 1.35rem; margin: 0; }
+.login-card .sub { color: var(--ink-faint); font-size: 13px; margin: 0; }
+.login-card label { display: grid; gap: 6px; font-size: 12px; color: var(--ink-faint); }
+.login-card input {
+  padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--ink); font-size: 14px;
+}
+.login-card button {
+  margin-top: 8px; padding: 11px; border: 0; border-radius: 8px;
+  background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+}
+.login-error { color: var(--crit); font-size: 13px; margin: 0; }
