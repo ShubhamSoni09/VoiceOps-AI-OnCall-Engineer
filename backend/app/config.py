@@ -23,14 +23,20 @@ class Settings(BaseSettings):
     aws_transcribe_language: str = "en-US"
     aws_s3_bucket: str | None = None
 
-    # LLM (intent extraction)
-    llm_provider: str = "mock"  # openai | bedrock | mock
+    # LLM (intent extraction + code fixes)
+    llm_provider: str = "claude"  # claude | openai | bedrock | mock
+    # Anthropic / Claude
+    anthropic_api_key: str | None = None
+    claude_model: str = "claude-opus-4-5"
+    # OpenAI (whisper STT fallback)
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    # TTS
     tts_provider: str = "openai"  # openai | mock
     tts_on_voice: bool = False
     openai_tts_model: str = "tts-1-hd"
     openai_tts_voice: str = "shimmer"
+    # AWS Bedrock
     bedrock_model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0"
     bedrock_region: str = "us-east-1"
 

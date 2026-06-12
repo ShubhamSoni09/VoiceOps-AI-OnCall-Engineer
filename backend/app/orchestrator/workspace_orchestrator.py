@@ -448,41 +448,56 @@ class WorkspaceOrchestrator:
         transcript: str,
         target: str | None,
     ) -> str | None:
-        if self._settings.llm_provider != "openai" or not self._settings.openai_api_key:
-            return None
-
-        from openai import AsyncOpenAI
-
         focus = {
-            "health": "Add GET /health returning {\"status\": \"ok\"}.",
-            "charge": "Add GET /v2/charge that accepts amount query param and returns {\"status\": \"charged\", ...}.",
+            "health": 'Add GET /health returning {"status": "ok"}.',
+            "charge": 'Add GET /v2/charge that accepts amount query param and returns {"status": "charged", ...}.',
             "metrics": "Fix GET /metrics to return error_rate (not error_rate_pct) with value under 1.0.",
         }.get(target or "", "Fix only what the failing pytest tests require.")
 
-        client = AsyncOpenAI(api_key=self._settings.openai_api_key)
-        response = await client.chat.completions.create(
-            model=self._settings.openai_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You fix Python FastAPI code in a sandbox repo. "
-                        f"{focus} "
-                        "Return ONLY the complete updated app.py file contents. No markdown fences."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"User request: {transcript}\n\n"
-                        f"Test failure:\n{failure}\n\n"
-                        f"Current app.py:\n{source}"
-                    ),
-                },
-            ],
-            temperature=0.1,
+        system_prompt = (
+            "You fix Python FastAPI code in a sandbox repo. "
+            f"{focus} "
+            "Return ONLY the complete updated app.py file contents. No markdown fences, no explanation."
         )
-        content = (response.choices[0].message.content or "").strip()
+        user_content = (
+            f"User request: {transcript}\n\n"
+            f"Test failure:\n{failure}\n\n"
+            f"Current app.py:\n{source}"
+        )
+
+        # Prefer Claude (Anthropic direct API)
+        if self._settings.llm_provider == "claude" and self._settings.anthropic_api_key:
+            import anthropic
+
+            client = anthropic.AsyncAnthropic(api_key=self._settings.anthropic_api_key)
+            message = await client.messages.create(
+                model=self._settings.claude_model,
+                max_tokens=4096,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_content}],
+                temperature=0.1,
+            )
+            content = message.content[0].text if message.content else ""
+
+        # Fallback: OpenAI
+        elif self._settings.llm_provider == "openai" and self._settings.openai_api_key:
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(api_key=self._settings.openai_api_key)
+            response = await client.chat.completions.create(
+                model=self._settings.openai_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content},
+                ],
+                temperature=0.1,
+            )
+            content = response.choices[0].message.content or ""
+
+        else:
+            return None
+
+        content = content.strip()
         content = re.sub(r"^```(?:python)?\s*", "", content)
         content = re.sub(r"\s*```$", "", content)
         return content.strip() or None

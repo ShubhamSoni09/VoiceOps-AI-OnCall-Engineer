@@ -8,6 +8,7 @@ openai-whisper>=20240930
 imageio-ffmpeg>=0.5.1
 boto3>=1.35.0
 openai>=1.55.0
+anthropic>=0.109.0
 python-dotenv>=1.0.0
 python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0

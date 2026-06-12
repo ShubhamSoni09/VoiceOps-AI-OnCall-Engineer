@@ -95,3 +95,4 @@ asyncio.exceptions.CancelledError
 INFO:     Started server process [23668]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app\config.py'. Reloading...

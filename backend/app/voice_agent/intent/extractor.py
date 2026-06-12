@@ -63,6 +63,44 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
+class ClaudeIntentExtractor(IntentExtractor):
+    """Extract intent using Anthropic Claude (direct API)."""
+
+    def __init__(self, settings: Settings) -> None:
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER=claude")
+        import anthropic
+
+        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self._model = settings.claude_model
+
+    async def extract(
+        self,
+        transcript: str,
+        *,
+        history: list[ConversationTurn] | None = None,
+        incident_context: dict | None = None,
+    ) -> ExtractedIntent:
+        history_text = "\n".join(f"{t.role}: {t.content}" for t in (history or [])) or "(none)"
+        incident_text = json.dumps(incident_context or {}, indent=2)
+
+        user_prompt = INTENT_EXTRACTION_USER.format(
+            history=history_text,
+            transcript=transcript,
+            incident_context=incident_text,
+        )
+
+        message = await self._client.messages.create(
+            model=self._model,
+            max_tokens=1024,
+            system=INTENT_EXTRACTION_SYSTEM,
+            messages=[{"role": "user", "content": user_prompt}],
+            temperature=0.2,
+        )
+        content = message.content[0].text if message.content else "{}"
+        return _parse_intent_payload(_extract_json(content), transcript=transcript)
+
+
 class OpenAIIntentExtractor(IntentExtractor):
     """Extract intent using OpenAI Chat Completions."""
 
@@ -222,7 +260,9 @@ def _extract_entities(transcript: str, incident_context: dict) -> dict:
 
 
 def get_intent_extractor(settings: Settings) -> IntentExtractor:
-    if settings.llm_provider == "openai":
+    if settings.llm_provider == "claude" and settings.anthropic_api_key:
+        return ClaudeIntentExtractor(settings)
+    if settings.llm_provider == "openai" and settings.openai_api_key:
         return OpenAIIntentExtractor(settings)
     if settings.llm_provider == "bedrock":
         return BedrockIntentExtractor(settings)

@@ -1,3 +1,4 @@
 INFO:     127.0.0.1:51233 - "POST /auth/login HTTP/1.1" 500 Internal Server Error
 INFO:     127.0.0.1:51234 - "GET /console/bootstrap HTTP/1.1" 401 Unauthorized
-  
+  INFO:     127.0.0.1:52255 - "GET /dashboard HTTP/1.1" 404 Not Found
+ 
