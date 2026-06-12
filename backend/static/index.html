@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoiceOps — Push to Talk</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --recording: #ef4444;
+      --success: #22c55e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+    header { text-align: center; margin-bottom: 2rem; max-width: 520px; }
+    header h1 { font-size: 1.75rem; font-weight: 600; margin-bottom: 0.5rem; }
+    header p { color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 520px;
+    }
+    .mic-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    #talkBtn {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 3px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 2.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #talkBtn:hover:not(:disabled) {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.1);
+    }
+    #talkBtn.recording {
+      border-color: var(--recording);
+      background: rgba(239, 68, 68, 0.15);
+      animation: pulse 1.2s infinite;
+    }
+    #talkBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+    }
+    .hint { color: var(--muted); font-size: 0.85rem; text-align: center; }
+    .status {
+      text-align: center;
+      font-size: 0.9rem;
+      min-height: 1.4rem;
+      margin-bottom: 1rem;
+    }
+    .status.processing { color: var(--accent); }
+    .status.error { color: var(--recording); }
+    .status.done { color: var(--success); }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.35rem; }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    .results { display: none; margin-top: 1.5rem; }
+    .results.visible { display: block; }
+    .result-block {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .result-block h3 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    .result-block p, .result-block pre {
+      font-size: 0.9rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .result-block pre {
+      font-size: 0.8rem;
+      overflow-x: auto;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      background: rgba(59, 130, 246, 0.2);
+      color: var(--accent);
+      margin-right: 0.35rem;
+    }
+    footer {
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>VoiceOps</h1>
+    <p>Hold the button and speak. Your command runs through STT → intent → normalization → context enrichment → spoken response.</p>
+  </header>
+
+  <div class="card">
+    <label for="sessionId">Session ID</label>
+    <input type="text" id="sessionId" value="demo" placeholder="demo" />
+
+    <div class="mic-area">
+      <button id="talkBtn" title="Hold to talk">🎤</button>
+      <p class="hint">Hold to talk · or hold <kbd style="padding:0.15rem 0.4rem;border:1px solid var(--border);border-radius:4px;font-size:0.8rem;">Space</kbd> · Release to send</p>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div id="results" class="results">
+      <div class="result-block">
+        <h3>Assistant Response</h3>
+        <p id="responseText"></p>
+        <button id="replayBtn" type="button" style="display:none;margin-top:0.75rem;padding:0.5rem 1rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;">🔊 Replay</button>
+      </div>
+      <div class="result-block">
+        <h3>Transcript</h3>
+        <p id="transcript"></p>
+      </div>
+      <div class="result-block">
+        <h3>Intent</h3>
+        <p id="intent"></p>
+      </div>
+      <div class="result-block">
+        <h3>Normalized Command</h3>
+        <p id="command"></p>
+      </div>
+      <div class="result-block">
+        <h3>Suggested Next Steps</h3>
+        <p id="steps"></p>
+      </div>
+      <div class="result-block">
+        <h3>Full Response</h3>
+        <pre id="raw"></pre>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <a href="/docs">API docs</a> · First run may be slow while Whisper loads the model
+  </footer>
+
+  <script>
+    const talkBtn = document.getElementById("talkBtn");
+    const statusEl = document.getElementById("status");
+    const resultsEl = document.getElementById("results");
+    const replayBtn = document.getElementById("replayBtn");
+
+    let mediaRecorder = null;
+    let chunks = [];
+    let stream = null;
+    let lastSpeech = null;
+    let spaceHeld = false;
+
+    function isTypingTarget(el) {
+      return el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+    }
+
+    function setStatus(msg, cls = "") {
+      statusEl.textContent = msg;
+      statusEl.className = "status " + cls;
+    }
+
+    function speakWithBrowserTTS(text) {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function playSpeech(speech) {
+      if (!speech) return;
+      lastSpeech = speech;
+
+      if (speech.audio_base64) {
+        const audio = new Audio(`data:${speech.mime_type || "audio/mpeg"};base64,${speech.audio_base64}`);
+        audio.play().catch(() => speakWithBrowserTTS(speech.text));
+        replayBtn.style.display = "inline-block";
+        return;
+      }
+
+      speakWithBrowserTTS(speech.text);
+      replayBtn.style.display = speech.text ? "inline-block" : "none";
+    }
+
+    replayBtn.addEventListener("click", () => playSpeech(lastSpeech));
+
+    async function initMic() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setStatus("Microphone ready — hold the button or Space to speak");
+      } catch (err) {
+        setStatus("Microphone access denied: " + err.message, "error");
+        talkBtn.disabled = true;
+      }
+    }
+
+    function startRecording() {
+      if (!stream || talkBtn.disabled) return;
+      if (mediaRecorder && mediaRecorder.state === "recording") return;
+      chunks = [];
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm";
+      mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      mediaRecorder.onstop = sendAudio;
+      mediaRecorder.start();
+      talkBtn.classList.add("recording");
+      setStatus("Listening…", "processing");
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        talkBtn.classList.remove("recording");
+      }
+    }
+
+    async function sendAudio() {
+      if (chunks.length === 0) {
+        setStatus("No audio captured — try again", "error");
+        return;
+      }
+
+      setStatus("Processing (STT + intent + speech)… first run may take ~30s", "processing");
+      talkBtn.disabled = true;
+
+      const blob = new Blob(chunks, { type: chunks[0].type || "audio/webm" });
+      const form = new FormData();
+      form.append("audio", blob, "recording.webm");
+      form.append("session_id", document.getElementById("sessionId").value || "demo");
+      form.append("incident_context", "{}");
+
+      try {
+        const res = await fetch("/voice/process-audio", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || res.statusText);
+
+        document.getElementById("responseText").textContent = data.response_text || data.speech?.text || "";
+        document.getElementById("transcript").textContent = data.transcript;
+        playSpeech(data.speech);
+        document.getElementById("intent").innerHTML =
+          `<span class="badge">${data.intent.intent}</span>` +
+          `<span class="badge">${data.intent.action}</span><br><br>` +
+          data.intent.raw_summary;
+        document.getElementById("command").innerHTML =
+          `<strong>${data.command.normalized_text}</strong><br><br>` +
+          `Target: ${data.command.target || "—"} · Urgency: ${data.command.urgency}` +
+          (data.command.requires_approval ? " · ⚠ Requires approval" : "");
+        document.getElementById("steps").textContent =
+          (data.context.suggested_next_steps || []).map((s, i) => `${i + 1}. ${s}`).join("\n");
+        document.getElementById("raw").textContent = JSON.stringify(data, null, 2);
+
+        resultsEl.classList.add("visible");
+        setStatus("Done", "done");
+      } catch (err) {
+        setStatus("Error: " + err.message, "error");
+      } finally {
+        talkBtn.disabled = false;
+      }
+    }
+
+    talkBtn.addEventListener("mousedown", startRecording);
+    talkBtn.addEventListener("mouseup", stopRecording);
+    talkBtn.addEventListener("mouseleave", stopRecording);
+    talkBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startRecording(); });
+    talkBtn.addEventListener("touchend", (e) => { e.preventDefault(); stopRecording(); });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.code !== "Space" || e.repeat || spaceHeld) return;
+      if (isTypingTarget(e.target)) return;
+      e.preventDefault();
+      spaceHeld = true;
+      startRecording();
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (e.code !== "Space" || !spaceHeld) return;
+      e.preventDefault();
+      spaceHeld = false;
+      stopRecording();
+    });
+
+    window.addEventListener("blur", () => {
+      if (!spaceHeld) return;
+      spaceHeld = false;
+      stopRecording();
+    });
+
+    initMic();
+  </script>
+</body>
+</html>

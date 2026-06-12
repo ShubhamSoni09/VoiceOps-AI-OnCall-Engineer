@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.voiceops_memory.json
+backend/data/users.json
+*.wav
+*.mp3
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
+node_modules/
+frontend/dist/
+
+# local ruflo / tooling artifacts
+ruvector.db
+.claude/
+.cursor/
+
+# os
+.DS_Store
