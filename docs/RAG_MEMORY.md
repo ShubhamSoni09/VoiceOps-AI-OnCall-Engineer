@@ -41,7 +41,7 @@ Unsupported providers fail explicitly:
 
 Runtime paths are configured through backend settings:
 
-- `RAG_INDEX_PATH`: persisted RAG JSON index. Default: `backend/data/rag_index.json`.
+- `RAG_INDEX_PATH`: persisted RAG JSON index. Local default: `backend/data/rag_index.json`; production should use a private path outside `VOICEOPS_WORKSPACE`.
 - `COLLAB_STORE_PATH`: room messages, memory, actions, agent settings.
 - `SPEAKER_STORE_PATH`: speaker mappings and profiles.
 - `VOICEOPS_CACHE_PATH`: runtime cache for local readiness/status data.

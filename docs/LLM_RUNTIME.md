@@ -113,10 +113,12 @@ ANTHROPIC_MODEL=claude-sonnet-4-5
 OPENAI_COMPATIBLE_API_KEY=
 OPENAI_COMPATIBLE_BASE_URL=http://127.0.0.1:8000/v1
 OPENAI_COMPATIBLE_MODEL=glm-5.2
-LLM_CONNECTION_STORE_PATH=backend/data/llm_connections.json
-AGENT_LLM_ROUTES_PATH=backend/data/agent_llm_routes.json
+LLM_CONNECTION_STORE_PATH=/var/lib/voiceops/llm_connections.json
+AGENT_LLM_ROUTES_PATH=/var/lib/voiceops/agent_llm_routes.json
 BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
 BEDROCK_REGION=us-east-1
 ```
+
+Local demos may use `backend/data`; production stores must live in a private directory outside `VOICEOPS_WORKSPACE`.
 
 For connected external coding tools, use `/external-agents` provider credentials. Those providers can propose work, but VoiceOps still owns the approval-first action pipeline.

@@ -151,7 +151,7 @@ Cursor and local/open-source agents are CLI-only in VoiceOps. To get the real ag
 
 - `EXTERNAL_AGENT_CREDENTIAL_SECRET` encrypts provider credentials at rest.
 - `EXTERNAL_AGENT_ALLOWED_PROVIDERS` limits enabled providers.
-- Runtime credential files live under `backend/data` and are gitignored.
+- Runtime credential files live in the configured private runtime directory; local demos default to gitignored `backend/data`, production should use a path outside `VOICEOPS_WORKSPACE`.
 - Responses never return raw tokens.
 - External runs publish room audit events and create normal approval-first actions.
 - Auto-routed voice assignments keep `voice_transcript`, `resolved_context`, recommended provider/model/mode, confidence, and blockers in assignment metadata.
