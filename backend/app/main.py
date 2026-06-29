@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -7,25 +6,31 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.agents import agents_router
 from app.auth import auth_router
+from app.collab import collab_router
 from app.config import get_settings
 from app.console import console_router
+from app.external_agents import external_agents_router
+from app.llm import llm_router
+from app.long_memory import long_memory_router
+from app.ontology import ontology_router
+from app.speakers import speakers_router
+from app.system import system_router
+from app.system.security import validate_startup_security
 from app.voice_agent.router import router as voice_router
+from app.workspace.router import router as workspace_router
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 DESIGN_DIR = Path(__file__).resolve().parent.parent.parent / "design"
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 settings = get_settings()
+validate_startup_security(settings)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if settings.stt_provider == "whisper":
-        from app.voice_agent.stt.whisper import WhisperSTT
-
-        stt = WhisperSTT(settings)
-        await asyncio.to_thread(stt.preload)
     yield
 
 
@@ -38,18 +43,30 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.cors_allowed_origins,
+    allow_credentials=settings.cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(auth_router)
+app.include_router(agents_router)
+app.include_router(collab_router)
 app.include_router(console_router)
+app.include_router(external_agents_router)
+app.include_router(llm_router)
+app.include_router(long_memory_router)
+app.include_router(ontology_router)
+app.include_router(speakers_router)
+app.include_router(system_router)
 app.include_router(voice_router)
+app.include_router(workspace_router)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+if (FRONTEND_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="react-assets")
 
 
 @app.get("/")

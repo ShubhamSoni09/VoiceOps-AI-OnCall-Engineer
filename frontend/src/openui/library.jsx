@@ -29,15 +29,15 @@ function renderNodes(renderNode, value) {
 
 const Briefing = defineComponent({
   name: 'Briefing',
-  description: 'Top-level incident briefing panel. Always the root component.',
+  description: 'Top-level meeting workspace briefing panel. Always the root component.',
   props: z.object({
-    title: z.string().describe('Incident title, one line'),
+    title: z.string().describe('Workspace briefing title, one line'),
     children: z.array(z.any()).optional().describe('Summary, MetricGrid, Findings, Callout blocks'),
   }),
   component: ({ props, renderNode }) => (
     <div className="openui-panel">
       <div className="oui-head">
-        incident briefing
+        workspace briefing
         <span className="badge"><Lightning size={12} weight="fill" /> rendered by OpenUI</span>
       </div>
       <div className="oui-body">
@@ -50,7 +50,7 @@ const Briefing = defineComponent({
 
 const Summary = defineComponent({
   name: 'Summary',
-  description: 'A one-paragraph plain-text summary of the incident',
+  description: 'A one-paragraph plain-text summary of the meeting or workspace state',
   props: z.object({ text: z.string() }),
   component: ({ props }) => <div className="text">{props.text}</div>,
 })
@@ -134,10 +134,10 @@ export const voiceopsLibrary = createLibrary({
 // Hand this to the LLM once a key is wired up so it emits renderable OpenUI Lang.
 export const voiceopsSystemPrompt = voiceopsLibrary.prompt({
   preamble:
-    'You are VoiceOps, an AI on-call engineer. Summarise the incident analysis as a single Briefing.',
+    'You are VoiceOps, an AI teammate in a collaborative coding room. Summarise the meeting state as a single Briefing.',
   additionalRules: [
     'Always start with root = Briefing(...).',
-    'Use a MetricGrid with 2 to 4 Metric tiles for the live numbers.',
-    'Use Findings for cause / commit / fix, and a Callout for the proposed next action.',
+    'Use a MetricGrid with 2 to 4 Metric tiles for open work, approvals, speaker mapping, tests, or branch state.',
+    'Use Findings for cause / commit / fix when code work is involved, and a Callout for the proposed next action.',
   ],
 })

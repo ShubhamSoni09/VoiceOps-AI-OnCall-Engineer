@@ -14,7 +14,7 @@ security = HTTPBearer(auto_error=False)
 @lru_cache
 def get_user_store() -> UserStore:
     settings = get_settings()
-    return UserStore(settings.users_store_path)
+    return UserStore(settings.users_store_path, seed_demo_users=settings.seed_demo_users)
 
 
 def _resolve_user(

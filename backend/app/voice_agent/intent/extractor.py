@@ -2,9 +2,9 @@ import json
 import re
 from abc import ABC, abstractmethod
 
-import boto3
-
 from app.config import Settings
+from app.llm import LLMMessage, LLMRequest
+from app.llm.service import LLMRuntime, get_llm_runtime
 from app.voice_agent.intent.prompts import INTENT_EXTRACTION_SYSTEM, INTENT_EXTRACTION_USER
 from app.voice_agent.intent.spoken_fallback import infer_spoken_response
 from app.voice_agent.models import ConversationTurn, ExtractedIntent, IncidentAction, VoiceIntent
@@ -63,16 +63,12 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-class OpenAIIntentExtractor(IntentExtractor):
-    """Extract intent using OpenAI Chat Completions."""
+class LLMIntentExtractor(IntentExtractor):
+    """Extract intent through the shared VoiceOps LLM runtime."""
 
-    def __init__(self, settings: Settings) -> None:
-        if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
-        from openai import AsyncOpenAI
-
-        self._client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self._model = settings.openai_model
+    def __init__(self, settings: Settings, runtime: LLMRuntime | None = None) -> None:
+        self._settings = settings
+        self._runtime = runtime or get_llm_runtime(settings)
 
     async def extract(
         self,
@@ -90,67 +86,39 @@ class OpenAIIntentExtractor(IntentExtractor):
             incident_context=incident_text,
         )
 
-        response = await self._client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {"role": "system", "content": INTENT_EXTRACTION_SYSTEM},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.2,
+        response = await self._runtime.generate(
+            LLMRequest(
+                purpose="intent_extraction",
+                response_format="json",
+                temperature=0.2,
+                max_tokens=1024,
+                metadata={"llm_provider": self._settings.llm_provider},
+                messages=[
+                    LLMMessage(role="system", content=INTENT_EXTRACTION_SYSTEM),
+                    LLMMessage(role="user", content=user_prompt),
+                ],
+            )
         )
-        content = response.choices[0].message.content or "{}"
-        return _parse_intent_payload(_extract_json(content), transcript=transcript)
+        return _parse_intent_payload(_extract_json(response.content), transcript=transcript)
 
 
-class BedrockIntentExtractor(IntentExtractor):
-    """Extract intent using AWS Bedrock (Claude)."""
+class OpenAIIntentExtractor(LLMIntentExtractor):
+    """Backward-compatible alias for OpenAI intent extraction."""
 
-    def __init__(self, settings: Settings) -> None:
-        self._client = boto3.client("bedrock-runtime", region_name=settings.bedrock_region)
-        self._model_id = settings.bedrock_model_id
 
-    async def extract(
-        self,
-        transcript: str,
-        *,
-        history: list[ConversationTurn] | None = None,
-        incident_context: dict | None = None,
-    ) -> ExtractedIntent:
-        import asyncio
-
-        history_text = "\n".join(f"{t.role}: {t.content}" for t in (history or [])) or "(none)"
-        incident_text = json.dumps(incident_context or {}, indent=2)
-
-        user_prompt = INTENT_EXTRACTION_USER.format(
-            history=history_text,
-            transcript=transcript,
-            incident_context=incident_text,
-        )
-
-        body = {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1024,
-            "system": INTENT_EXTRACTION_SYSTEM,
-            "messages": [{"role": "user", "content": user_prompt}],
-        }
-
-        response = await asyncio.to_thread(
-            self._client.invoke_model,
-            modelId=self._model_id,
-            body=json.dumps(body),
-            contentType="application/json",
-            accept="application/json",
-        )
-        result = json.loads(response["body"].read())
-        content = result["content"][0]["text"]
-        return _parse_intent_payload(_extract_json(content), transcript=transcript)
+class BedrockIntentExtractor(LLMIntentExtractor):
+    """Backward-compatible alias for Bedrock intent extraction."""
 
 
 class MockIntentExtractor(IntentExtractor):
     """Rule-based intent extractor for local dev without Bedrock."""
 
     RULES: list[tuple[re.Pattern[str], VoiceIntent, IncidentAction]] = [
+        (re.compile(r"\b(verify|check|run|start).+\b(demo readiness|readiness gate|demo gate|real live gate|real browser gate|browser mic gate|whisperx gate)\b", re.I), VoiceIntent.CHECK_STATUS, IncidentAction.VERIFY),
+        (re.compile(r"\b(explain|walk me through|what does .+ do)\b|解释|讲一下", re.I), VoiceIntent.EXPLAIN_CODE, IncidentAction.EXPLAIN_CODE),
+        (re.compile(r"\b(find (?:a )?bug|look for bugs|bug hunt|debug)\b|找.*bug|查.*bug", re.I), VoiceIntent.FIND_BUG, IncidentAction.FIND_BUG),
+        (re.compile(r"\b(summarize|recap).+\b(changes|adjustments|diffs|work)\b|\bwhat changes\b|\bwhat did .+ (?:change|do|work on)\b|总结.*(改|变化|工作)", re.I), VoiceIntent.SUMMARIZE_CHANGES, IncidentAction.SUMMARIZE_CHANGES),
+        (re.compile(r"\b(git status|branch|working tree|workspace diff)\b|git状态|分支|工作区状态", re.I), VoiceIntent.GIT_STATUS, IncidentAction.GIT_STATUS),
         (re.compile(r"\b(fix|patch|resolve|repair)\b", re.I), VoiceIntent.FIX_ISSUE, IncidentAction.PATCH),
         (re.compile(r"\b(why|investigate|what'?s wrong|failing|down|error|incident)\b", re.I), VoiceIntent.INVESTIGATE_INCIDENT, IncidentAction.INVESTIGATE),
         (re.compile(r"\b(deploy|ship|release|push to prod)\b", re.I), VoiceIntent.DEPLOY_SERVICE, IncidentAction.DEPLOY),
@@ -203,7 +171,7 @@ def _extract_entities(transcript: str, incident_context: dict) -> dict:
 
 
 def get_intent_extractor(settings: Settings) -> IntentExtractor:
-    if settings.llm_provider == "openai":
+    if settings.llm_provider in {"openai", "anthropic", "openai_compatible"}:
         return OpenAIIntentExtractor(settings)
     if settings.llm_provider == "bedrock":
         return BedrockIntentExtractor(settings)

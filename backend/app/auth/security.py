@@ -43,4 +43,5 @@ def to_public_user(user: UserRecord) -> UserPublic:
         role=user.role,
         role_label=ROLE_LABELS[user.role],
         permissions=sorted(ROLE_PERMISSIONS[user.role]),
+        projects=list(user.projects),
     )

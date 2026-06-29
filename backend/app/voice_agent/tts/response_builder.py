@@ -8,7 +8,7 @@ def build_response_text(
     orchestrator_result: OrchestratorResult | None = None,
 ) -> str:
     """Build the spoken reply — conversational for chat, concise for ops."""
-    if orchestrator_result and orchestrator_result.executed and orchestrator_result.summary:
+    if orchestrator_result and (orchestrator_result.executed or orchestrator_result.pending_approval) and orchestrator_result.summary:
         return orchestrator_result.summary.replace("**", "")
 
     if intent.spoken_response:

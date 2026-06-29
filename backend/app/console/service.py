@@ -1,18 +1,27 @@
 import os
+import re
 import subprocess
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+
+from app.workspace.tools import configured_workspace_is_url
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 
 class WorkspaceInfo(BaseModel):
     connected: bool = False
+    configured_workspace: str | None = None
+    source: str = "none"
+    persistence_note: str | None = None
+    setup_issue: str | None = None
     path: str | None = None
     name: str | None = None
     branch: str | None = None
     remote_url: str | None = None
+    remote_kind: str = "none"
+    remote_web_url: str | None = None
     is_git_repo: bool = False
     readme_line: str | None = None
 
@@ -78,42 +87,76 @@ def resolve_configured_workspace(configured: str | None) -> Path | None:
     return root
 
 
-def get_workspace_info(configured: str | None) -> WorkspaceInfo:
+def get_workspace_info(configured: str | None, *, source: str = "none") -> WorkspaceInfo:
+    configured_value = configured.strip() if configured and configured.strip() else None
+    if configured_workspace_is_url(configured_value):
+        return WorkspaceInfo(
+            connected=False,
+            configured_workspace=configured_value,
+            source=source,
+            persistence_note=_workspace_persistence_note(source),
+            setup_issue="VOICEOPS_WORKSPACE must point to a local clone path, not a GitHub or git remote URL.",
+        )
+
     root = resolve_configured_workspace(configured)
     if root is None:
-        return WorkspaceInfo(connected=False)
+        return WorkspaceInfo(
+            connected=False,
+            configured_workspace=configured_value,
+            source=source,
+            persistence_note=_workspace_persistence_note(source),
+        )
 
     branch = _run_git(root, "branch", "--show-current")
     remote = _run_git(root, "remote", "get-url", "origin")
     is_git = (root / ".git").exists()
+    remote_kind, remote_web_url = _remote_metadata(remote)
 
     return WorkspaceInfo(
         connected=True,
+        configured_workspace=configured_value,
+        source=source,
+        persistence_note=_workspace_persistence_note(source),
         path=str(root),
         name=root.name,
         branch=branch,
         remote_url=remote,
+        remote_kind=remote_kind,
+        remote_web_url=remote_web_url,
         is_git_repo=is_git,
         readme_line=_readme_first_line(root),
     )
 
 
+def _workspace_persistence_note(source: str) -> str | None:
+    if source == "configured":
+        return "Configured by VOICEOPS_WORKSPACE; UI switches affect the current backend process only unless env changes."
+    if source == "runtime":
+        return "Switched from the admin UI and saved for restart when VOICEOPS_WORKSPACE is empty."
+    if source == "saved":
+        return "Loaded from the saved admin workspace selection."
+    return None
+
+
 def build_integrations(workspace: WorkspaceInfo) -> list[IntegrationStatus]:
     if not workspace.connected:
+        detail = workspace.setup_issue or "Set VOICEOPS_WORKSPACE"
         return [
-            IntegrationStatus(id="github", label="GitHub", connected=False, detail="No repo connected"),
-            IntegrationStatus(id="mcp", label="MCP workspace", connected=False, detail="Set VOICEOPS_WORKSPACE"),
+            IntegrationStatus(id="github", label="GitHub", connected=False, detail="No local clone connected"),
+            IntegrationStatus(id="mcp", label="MCP workspace", connected=False, detail=detail),
             IntegrationStatus(id="render", label="Render", connected=False),
             IntegrationStatus(id="clickhouse", label="ClickHouse", connected=False),
-            IntegrationStatus(id="slack", label="Slack / PagerDuty", connected=False),
+            IntegrationStatus(id="slack", label="Slack", connected=False),
         ]
 
+    github_connected = workspace.is_git_repo and workspace.remote_kind == "github"
+    github_detail = _github_integration_detail(workspace)
     return [
         IntegrationStatus(
             id="github",
             label="GitHub",
-            connected=workspace.is_git_repo,
-            detail=workspace.remote_url or "Local git repo",
+            connected=github_connected,
+            detail=github_detail,
         ),
         IntegrationStatus(
             id="mcp",
@@ -123,5 +166,37 @@ def build_integrations(workspace: WorkspaceInfo) -> list[IntegrationStatus]:
         ),
         IntegrationStatus(id="render", label="Render", connected=False, detail="Not configured"),
         IntegrationStatus(id="clickhouse", label="ClickHouse", connected=False, detail="Not configured"),
-        IntegrationStatus(id="slack", label="Slack / PagerDuty", connected=False, detail="Not configured"),
+        IntegrationStatus(id="slack", label="Slack", connected=False, detail="Not configured"),
     ]
+
+
+def _remote_metadata(remote_url: str | None) -> tuple[str, str | None]:
+    remote = (remote_url or "").strip()
+    if not remote:
+        return "none", None
+    github_web_url = _github_web_url(remote)
+    if github_web_url:
+        return "github", github_web_url
+    return "git", None
+
+
+def _github_web_url(remote_url: str) -> str | None:
+    patterns = (
+        r"^git@github\.com:(?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$",
+        r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$",
+    )
+    for pattern in patterns:
+        match = re.match(pattern, remote_url)
+        if match:
+            return f"https://github.com/{match.group('owner')}/{match.group('repo')}"
+    return None
+
+
+def _github_integration_detail(workspace: WorkspaceInfo) -> str:
+    if not workspace.is_git_repo:
+        return "Local folder, git not initialized"
+    if workspace.remote_kind == "github":
+        return workspace.remote_web_url or "GitHub remote"
+    if workspace.remote_kind == "git":
+        return "Non-GitHub git remote"
+    return "Local git repo, no GitHub remote"

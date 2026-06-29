@@ -6,7 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:unit": "vitest run",
+    "e2e:all": "node tests/e2e/runAll.e2e.mjs",
+    "e2e:agent-controls": "node tests/e2e/agentControls.e2e.mjs",
+    "e2e:external-patch": "node tests/e2e/externalAgentPatchClosure.e2e.mjs",
+    "e2e:real-live": "node tests/e2e/realLiveMeeting.e2e.mjs",
+    "e2e:real-mic": "node tests/e2e/liveMeetingRealMic.e2e.mjs",
+    "e2e:mic-unavailable": "node tests/e2e/micUnavailable.e2e.mjs",
+    "e2e:live-mock-mic": "node tests/e2e/liveMeetingMockMic.e2e.mjs",
+    "e2e:live-smoke": "node tests/e2e/liveMeetingSmoke.e2e.mjs",
+    "e2e:meeting-closure": "node tests/e2e/meetingClosure.e2e.mjs",
+    "e2e:meeting-memory": "node tests/e2e/meetingMemory.e2e.mjs",
+    "e2e:generated-speaker": "node tests/e2e/generatedSpeakerVerification.e2e.mjs",
+    "e2e:speaker-calibration": "node tests/e2e/speakerCalibration.e2e.mjs"
   },
   "dependencies": {
     "@openuidev/lang-core": "^0.2.5",
@@ -18,7 +31,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^3.2.4"
   }
 }

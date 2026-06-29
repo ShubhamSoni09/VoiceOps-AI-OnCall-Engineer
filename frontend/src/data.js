@@ -1,11 +1,11 @@
 export const IDLE_STEPS = [
-  { key: 'investigate', label: 'Investigate', state: '' },
-  { key: 'diagnose', label: 'Diagnose', state: '' },
-  { key: 'patch', label: 'Patch', state: '' },
-  { key: 'test', label: 'Test', state: '' },
-  { key: 'pr', label: 'PR', state: '' },
-  { key: 'deploy', label: 'Deploy', state: '' },
-  { key: 'verify', label: 'Verify', state: '' },
+  { key: 'capture', label: 'Capture', state: '' },
+  { key: 'memory', label: 'Memory', state: '' },
+  { key: 'proposal', label: 'Proposal', state: '' },
+  { key: 'approval', label: 'Approval', state: '' },
+  { key: 'test', label: 'Tests', state: '' },
+  { key: 'branch', label: 'Branch', state: '' },
+  { key: 'handoff', label: 'Handoff', state: '' },
 ]
 
 export const ACTION_INDEX = {
@@ -19,4 +19,9 @@ export const ACTION_INDEX = {
   rollback: 5,
   status: 0,
   unknown: 0,
+  explain_code: 1,
+  find_bug: 1,
+  summarize_changes: 6,
+  git_status: 5,
+  run_tests: 4,
 }

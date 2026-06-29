@@ -3,22 +3,44 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.local
+.env.*.local
 .voiceops_memory.json
+backend/.voiceops_cache/
 backend/data/users.json
+backend/data/*.json
+backend/data/*.sqlite3
+backend/data/*.sqlite3-*
 *.wav
 *.mp3
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+*.lcov
 dist/
 build/
 *.egg-info/
 node_modules/
 frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.vitest/
 
 # local ruflo / tooling artifacts
 ruvector.db
 .claude/
 .cursor/
+.impeccable/
+
+# generated production-trial bundles
+voiceops-production-trial/
+production-trial/
+backend/voiceops-production-trial/
 
 # os
 .DS_Store

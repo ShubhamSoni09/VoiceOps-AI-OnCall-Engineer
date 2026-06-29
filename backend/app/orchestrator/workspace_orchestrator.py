@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import difflib
 import re
 from typing import Any
 
 from app.config import Settings
+from app.llm import LLMMessage, LLMRequest
+from app.llm.service import get_llm_runtime
 from app.orchestrator.test_summary import (
     build_investigation_summary,
-    build_patch_summary,
     build_test_summary,
 )
 from app.voice_agent.models import IncidentAction, NormalizedCommand, OrchestratorResult, VoiceIntent
+from app.workspace.git import WorkspaceGitService
+from app.workspace.service import WorkspaceCodeService
 from app.workspace.tools import (
     WorkspaceError,
     list_directory,
@@ -22,6 +26,9 @@ from app.workspace.tools import (
 WORKSPACE_ACTIONS = {
     IncidentAction.INVESTIGATE,
     IncidentAction.DIAGNOSE,
+    IncidentAction.EXPLAIN_CODE,
+    IncidentAction.FIND_BUG,
+    IncidentAction.GIT_STATUS,
     IncidentAction.TEST,
     IncidentAction.STATUS,
     IncidentAction.PATCH,
@@ -73,10 +80,20 @@ class WorkspaceOrchestrator:
         try:
             if action in {IncidentAction.INVESTIGATE, IncidentAction.DIAGNOSE, IncidentAction.STATUS}:
                 return await self._investigate(workspace, action)
+            if action == IncidentAction.EXPLAIN_CODE:
+                return await self._explain_code(transcript)
+            if action == IncidentAction.FIND_BUG:
+                return await self._find_bug(workspace)
+            if action == IncidentAction.GIT_STATUS:
+                return await self._git_status()
             if action == IncidentAction.TEST:
                 return await self._run_tests(workspace)
             if action == IncidentAction.PATCH:
-                return await self._patch(workspace, transcript)
+                result = await self._patch(workspace, _contextual_transcript(transcript, command))
+                resolved = command.parameters.get("resolved_context")
+                if result.pending_approval and isinstance(resolved, dict):
+                    result.approval["resolved_context"] = resolved
+                return result
             if action == IncidentAction.UNKNOWN:
                 if command.intent in {VoiceIntent.GENERAL_QUERY, VoiceIntent.UNKNOWN}:
                     return None
@@ -157,6 +174,82 @@ class WorkspaceOrchestrator:
             command_output=output,
         )
 
+    async def _explain_code(self, transcript: str) -> OrchestratorResult:
+        answer = WorkspaceCodeService(self._settings).query(transcript, limit=8)
+        artifacts = [
+            {
+                "type": "book",
+                "title": ref.path,
+                "subtitle": f"line {ref.line}",
+            }
+            for ref in answer.references[:3]
+        ]
+        return OrchestratorResult(
+            executed=True,
+            action=IncidentAction.EXPLAIN_CODE.value,
+            summary=answer.answer,
+            artifacts=artifacts,
+            files_changed=[],
+        )
+
+    async def _find_bug(self, workspace: str | None) -> OrchestratorResult:
+        _prepare_workspace(workspace)
+        test_result = run_command("python -m pytest -q", configured=workspace)
+        passed = test_result["exit_code"] == 0
+        output = _truncate(test_result["stdout"] + test_result["stderr"], 800)
+        summary = (
+            "I ran the tests and did not find a failing bug signal yet. No patch was proposed."
+            if passed
+            else "I found failing tests. I am reporting the failure only; say fix or patch when you want a proposed change."
+        )
+        return OrchestratorResult(
+            executed=True,
+            action=IncidentAction.FIND_BUG.value,
+            summary=summary,
+            artifacts=[
+                {
+                    "type": "logs",
+                    "title": "bug scan",
+                    "subtitle": "no failing tests" if passed else "failing tests found",
+                }
+            ],
+            command_output=output,
+            files_changed=[],
+        )
+
+    async def _git_status(self) -> OrchestratorResult:
+        git = WorkspaceGitService(self._settings)
+        status = git.status()
+        if not status.is_git_repo:
+            return OrchestratorResult(
+                executed=True,
+                action=IncidentAction.GIT_STATUS.value,
+                summary=status.warning or "The connected workspace is not a git repository.",
+            )
+        diff = git.diff()
+        changed_count = len(status.files)
+        changed_label = f"{changed_count} changed file{'s' if changed_count != 1 else ''}"
+        summary = (
+            f"Git branch {status.branch or 'unknown'} has {changed_label}."
+            if status.dirty
+            else f"Git branch {status.branch or 'unknown'} is clean."
+        )
+        status_lines = "\n".join(f"{item.status} {item.path}" for item in status.files)
+        return OrchestratorResult(
+            executed=True,
+            action=IncidentAction.GIT_STATUS.value,
+            summary=summary,
+            artifacts=[
+                {
+                    "type": "logs",
+                    "title": "git status",
+                    "subtitle": changed_label if status.dirty else "clean",
+                }
+            ],
+            command_output=_truncate(diff.diff or status_lines, 800),
+            files_changed=diff.files_changed,
+        )
+
     async def _patch(self, workspace: str | None, transcript: str) -> OrchestratorResult:
         _prepare_workspace(workspace)
         test_before = run_command("python -m pytest -q", configured=workspace)
@@ -178,33 +271,63 @@ class WorkspaceOrchestrator:
             )
 
         failure = test_before["stdout"] + test_before["stderr"]
-        updated = await self._generate_fix(original, failure, transcript)
+        updated, llm_metadata = await self._generate_fix(original, failure, transcript)
         if not updated or updated.strip() == original.strip():
             updated = _heuristic_health_fix(original)
+            llm_metadata = {**llm_metadata, "fallback": True, "fallback_strategy": "heuristic_health_fix"}
 
-        write_file("app.py", updated, configured=workspace)
-        test_after = run_command("python -m pytest -q", configured=workspace)
-        passed = test_after["exit_code"] == 0
-        output = _truncate(test_after["stdout"] + test_after["stderr"], 600)
+        proposed_files = {"app.py": updated}
+        if _requests_docs_update(transcript):
+            try:
+                readme = read_file("README.md", configured=workspace)
+                proposed_readme = _update_readme_for_health(readme)
+                if proposed_readme.strip() != readme.strip():
+                    proposed_files["README.md"] = proposed_readme
+            except WorkspaceError:
+                pass
 
-        if passed:
-            summary = build_patch_summary(True)
-        else:
-            summary = build_patch_summary(False)
+        diff = "".join(
+            _unified_diff(path, original if path == "app.py" else read_file(path, configured=workspace), content)
+            for path, content in proposed_files.items()
+        )
+        if not diff.strip():
+            return OrchestratorResult(
+                executed=False,
+                action=IncidentAction.PATCH.value,
+                summary="I could not produce a meaningful patch from the failing test output.",
+                command_output=_truncate(failure, 600),
+            )
+        changed_files = list(proposed_files.keys())
+        file_label = ", ".join(changed_files)
 
         return OrchestratorResult(
-            executed=True,
+            executed=False,
             action=IncidentAction.PATCH.value,
-            summary=summary,
-            files_changed=["app.py"],
+            summary=f"I prepared a patch for {file_label}. Review the diff and approve it before I write to the workspace.",
+            files_changed=changed_files,
             artifacts=[
                 {
                     "type": "pr",
-                    "title": "app.py patched in sandbox",
-                    "subtitle": "pytest passed" if passed else "pytest still failing",
+                    "title": f"{len(changed_files)} file patch proposal",
+                    "subtitle": "waiting for approval",
                 }
             ],
-            command_output=output,
+            command_output=_truncate(failure, 600),
+            pending_approval=True,
+            approval={
+                "kind": "patch",
+                "status": "pending_approval",
+                "diff": diff,
+                "test_command": "python -m pytest -q",
+                "proposed_files": changed_files,
+                "source": "workspace_orchestrator",
+                "llm": llm_metadata,
+            },
+            approval_payload={
+                "kind": "patch",
+                "files": proposed_files,
+                "test_command": "python -m pytest -q",
+            },
         )
 
     async def _general_workspace_query(self, workspace: str | None, transcript: str) -> OrchestratorResult:
@@ -215,38 +338,53 @@ class WorkspaceOrchestrator:
             return await self._run_tests(workspace)
         return await self._investigate(workspace, IncidentAction.INVESTIGATE)
 
-    async def _generate_fix(self, source: str, failure: str, transcript: str) -> str | None:
-        if self._settings.llm_provider != "openai" or not self._settings.openai_api_key:
-            return None
+    async def _generate_fix(self, source: str, failure: str, transcript: str) -> tuple[str | None, dict[str, Any]]:
+        metadata: dict[str, Any] = {
+            "provider": self._settings.llm_provider,
+            "purpose": "patch_generation",
+        }
+        if self._settings.llm_provider == "mock":
+            return None, {**metadata, "model": "local-heuristic", "fallback": True}
+        try:
+            response = await get_llm_runtime(self._settings).generate(
+                LLMRequest(
+                    purpose="patch_generation",
+                    response_format="text",
+                    temperature=0.1,
+                    max_tokens=4000,
+                    messages=[
+                        LLMMessage(
+                            role="system",
+                            content=(
+                                "You fix Python FastAPI code in a sandbox repo. "
+                                "Return ONLY the complete updated app.py file contents. No markdown fences."
+                            ),
+                        ),
+                        LLMMessage(
+                            role="user",
+                            content=(
+                                f"User request: {transcript}\n\n"
+                                f"Test failure:\n{failure}\n\n"
+                                f"Current app.py:\n{source}"
+                            ),
+                        ),
+                    ],
+                    metadata={"tool_policy": "approval_required"},
+                )
+            )
+        except Exception as exc:
+            return None, {**metadata, "fallback": True, "error": exc.__class__.__name__}
 
-        from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(api_key=self._settings.openai_api_key)
-        response = await client.chat.completions.create(
-            model=self._settings.openai_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You fix Python FastAPI code in a sandbox repo. "
-                        "Return ONLY the complete updated app.py file contents. No markdown fences."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"User request: {transcript}\n\n"
-                        f"Test failure:\n{failure}\n\n"
-                        f"Current app.py:\n{source}"
-                    ),
-                },
-            ],
-            temperature=0.1,
-        )
-        content = (response.choices[0].message.content or "").strip()
+        content = response.content.strip()
         content = re.sub(r"^```(?:python)?\s*", "", content)
         content = re.sub(r"\s*```$", "", content)
-        return content.strip() or None
+        return content.strip() or None, {
+            **metadata,
+            "provider": response.provider,
+            "model": response.model,
+            "usage": response.usage,
+            "fallback": False,
+        }
 
 
 def _heuristic_health_fix(source: str) -> str:
@@ -264,6 +402,29 @@ def _heuristic_health_fix(source: str) -> str:
     return source.rstrip() + insert
 
 
+def _requests_docs_update(transcript: str) -> bool:
+    lower = transcript.lower()
+    return any(word in lower for word in ("doc", "docs", "readme", "document"))
+
+
+def _update_readme_for_health(source: str) -> str:
+    if "GET /health" in source and "status" in source:
+        return source
+    addition = "\n\n## Health check\n\n- `GET /health` returns `{\"status\": \"ok\"}`.\n"
+    return source.rstrip() + addition
+
+
+def _unified_diff(path: str, before: str, after: str) -> str:
+    return "".join(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+        )
+    )
+
+
 def _prepare_workspace(workspace: str | None) -> None:
     root = resolve_configured_workspace(workspace) if workspace else None
     if root is None:
@@ -271,6 +432,13 @@ def _prepare_workspace(workspace: str | None) -> None:
     requirements = root / "requirements.txt"
     if requirements.is_file():
         run_command("python -m pip install -q -r requirements.txt", configured=workspace)
+
+
+def _contextual_transcript(transcript: str, command: NormalizedCommand) -> str:
+    resolved = command.parameters.get("resolved_context")
+    if not isinstance(resolved, dict) or not resolved.get("text"):
+        return transcript
+    return f"{transcript}\n\nRecent meeting context: {resolved['text']}"
 
 
 def _truncate(text: str, limit: int) -> str:

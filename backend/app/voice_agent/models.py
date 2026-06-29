@@ -7,6 +7,10 @@ from pydantic import BaseModel, Field
 class IncidentAction(str, Enum):
     INVESTIGATE = "investigate"
     DIAGNOSE = "diagnose"
+    EXPLAIN_CODE = "explain_code"
+    FIND_BUG = "find_bug"
+    SUMMARIZE_CHANGES = "summarize_changes"
+    GIT_STATUS = "git_status"
     PATCH = "patch"
     TEST = "test"
     CREATE_PR = "create_pr"
@@ -20,6 +24,10 @@ class IncidentAction(str, Enum):
 class VoiceIntent(str, Enum):
     INVESTIGATE_INCIDENT = "investigate_incident"
     FIX_ISSUE = "fix_issue"
+    EXPLAIN_CODE = "explain_code"
+    FIND_BUG = "find_bug"
+    SUMMARIZE_CHANGES = "summarize_changes"
+    GIT_STATUS = "git_status"
     DEPLOY_SERVICE = "deploy_service"
     CHECK_STATUS = "check_status"
     ROLLBACK_DEPLOYMENT = "rollback_deployment"
@@ -81,6 +89,8 @@ class OrchestratorResult(BaseModel):
     files_changed: list[str] = Field(default_factory=list)
     command_output: str | None = None
     pending_approval: bool = False
+    approval: dict[str, Any] = Field(default_factory=dict)
+    approval_payload: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
 
 class VoiceProcessRequest(BaseModel):
@@ -88,6 +98,7 @@ class VoiceProcessRequest(BaseModel):
 
     text: str
     session_id: str = "default"
+    room_id: str = "main"
     incident_context: dict[str, Any] = Field(default_factory=dict)
     include_tts: bool = False
 

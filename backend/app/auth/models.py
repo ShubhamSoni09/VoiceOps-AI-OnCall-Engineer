@@ -17,8 +17,24 @@ ROLE_LABELS = {
 
 ROLE_PERMISSIONS: dict[Role, set[str]] = {
     Role.VIEWER: {"dashboard:view"},
-    Role.ON_CALL: {"dashboard:view", "voice:use", "incident:approve"},
-    Role.ADMIN: {"dashboard:view", "voice:use", "incident:approve", "admin:manage"},
+    Role.ON_CALL: {
+        "dashboard:view",
+        "voice:use",
+        "incident:approve",
+        "agent:run",
+        "agent:approve",
+        "credentials:manage_own",
+    },
+    Role.ADMIN: {
+        "dashboard:view",
+        "voice:use",
+        "incident:approve",
+        "agent:run",
+        "agent:approve",
+        "credentials:manage_own",
+        "credentials:manage_all",
+        "admin:manage",
+    },
 }
 
 
@@ -29,6 +45,7 @@ class UserRecord(BaseModel):
     initials: str
     role: Role
     password_hash: str
+    projects: list[str] = Field(default_factory=list)
 
 
 class UserPublic(BaseModel):
@@ -39,6 +56,7 @@ class UserPublic(BaseModel):
     role: Role
     role_label: str
     permissions: list[str] = Field(default_factory=list)
+    projects: list[str] = Field(default_factory=list)
 
 
 class LoginRequest(BaseModel):
@@ -56,3 +74,7 @@ class TokenPayload(BaseModel):
     sub: str
     email: str
     role: Role
+
+
+class UserProjectsUpdate(BaseModel):
+    projects: list[str] = Field(default_factory=list)

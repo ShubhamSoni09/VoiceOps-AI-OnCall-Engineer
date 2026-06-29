@@ -6,15 +6,17 @@
  * Syntax: `identifier = Component(arg1, arg2, ...)`, positional args, references
  * resolved after parse. See frontend/src/openui/library.jsx for the components.
  */
-export const INCIDENT_BRIEFING = `root = Briefing("checkout-api 500s on /v2/charge", [summary, metrics, findings, note])
-summary = Summary("Deploy a3f9c2 raised request concurrency to 64 but left the DB pool at 20. The pool is exhausted, 64 requests are queued, and every one times out at 5s.")
+export const WORKSPACE_BRIEFING = `root = Briefing("Meeting closure for app.py", [summary, metrics, findings, note])
+summary = Summary("Priya asked the agent to keep the patch small, Bob is waiting to review the proposed app.py change, and the latest handoff needs the test result before the task can close.")
 metrics = MetricGrid([m1, m2, m3, m4])
-m1 = Metric("Error rate", "4.7%", "bad")
-m2 = Metric("p99 latency", "1,840ms", "warn")
-m3 = Metric("Throughput", "312 req/s", "ok")
-m4 = Metric("Error budget", "87.3%", "warn")
+m1 = Metric("Open tasks", "2", "warn")
+m2 = Metric("Pending patches", "1", "warn")
+m3 = Metric("Mapped speakers", "2", "ok")
+m4 = Metric("Tests run", "1", "ok")
 findings = Findings([f1, f2, f3])
-f1 = Finding("cause", "Connection pool too small for the new concurrency limit")
-f2 = Finding("commit", "Introduced by a3f9c2 (raise worker concurrency to 64) by m.bell")
-f3 = Finding("fix", "Raise db.pool.max 20 to 80, add a 2s acquire timeout")
-note = Callout("warn", "Proposed fix is in PR #482. The deploy preview needs your approval.")`
+f1 = Finding("cause", "The open task is the unresolved app.py health check fix from the meeting memory.")
+f2 = Finding("commit", "No commit has been created yet; approval should create a local branch first.")
+f3 = Finding("fix", "Approve the pending patch, run the configured tests, then update handoff with the result.")
+note = Callout("warn", "Patch output must stay pending until a teammate approves it.")`
+
+export const INCIDENT_BRIEFING = WORKSPACE_BRIEFING

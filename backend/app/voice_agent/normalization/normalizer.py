@@ -51,6 +51,14 @@ class CommandNormalizer:
             params.setdefault("steps", ["fetch_logs", "check_metrics", "diagnose"])
         elif intent.intent == VoiceIntent.FIX_ISSUE:
             params.setdefault("steps", ["diagnose", "patch", "test", "create_pr"])
+        elif intent.intent == VoiceIntent.EXPLAIN_CODE:
+            params.setdefault("steps", ["search_code", "summarize_references"])
+        elif intent.intent == VoiceIntent.FIND_BUG:
+            params.setdefault("steps", ["run_tests", "inspect_failures", "report_findings"])
+        elif intent.intent == VoiceIntent.SUMMARIZE_CHANGES:
+            params.setdefault("steps", ["read_timeline", "summarize_actions"])
+        elif intent.intent == VoiceIntent.GIT_STATUS:
+            params.setdefault("steps", ["read_git_status", "read_git_diff"])
         elif intent.intent == VoiceIntent.DEPLOY_SERVICE:
             params.setdefault("steps", ["deploy_preview", "health_check", "verify"])
         return params

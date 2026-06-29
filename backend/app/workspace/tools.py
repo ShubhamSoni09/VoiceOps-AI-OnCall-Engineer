@@ -5,6 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 DEFAULT_WORKSPACE = REPO_ROOT / "sandbox"
+WORKSPACE_URL_PATTERN = re.compile(r"^(?:https?://|git@|ssh://|git://)", re.IGNORECASE)
 
 BLOCKED_COMMAND_PATTERNS = re.compile(
     r"(;|&&|\|\||`|\$\(|\brm\b|\bdel\b|\bformat\b|\bshutdown\b|\brestart\b|"
@@ -24,8 +25,14 @@ class WorkspaceError(ValueError):
     pass
 
 
+def configured_workspace_is_url(configured: str | None) -> bool:
+    return bool(configured and WORKSPACE_URL_PATTERN.search(configured.strip()))
+
+
 def resolve_configured_workspace(configured: str | None) -> Path | None:
     if not configured or not configured.strip():
+        return None
+    if configured_workspace_is_url(configured):
         return None
     root = Path(configured.strip())
     if not root.is_absolute():

@@ -1,10 +1,11 @@
 from app.config import Settings, get_settings
 from app.orchestrator import WorkspaceOrchestrator
 from app.voice_agent.context.enricher import ContextEnricher, SessionMemory
+from app.voice_agent.demo_gates import start_demo_gate_from_text
 from app.voice_agent.intent.extractor import get_intent_extractor
-from app.voice_agent.models import SpeechResult, VoiceProcessResponse
+from app.voice_agent.models import SpeechResult, TranscriptionResult, VoiceProcessResponse
 from app.voice_agent.normalization.normalizer import CommandNormalizer
-from app.voice_agent.stt import get_stt_provider
+from app.voice_agent.stt import SpeechToTextProvider, get_stt_provider
 from app.voice_agent.tts import get_tts_provider
 from app.voice_agent.tts.response_builder import build_response_text
 
@@ -17,13 +18,18 @@ class VoiceAgentPipeline:
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
-        self._stt = get_stt_provider(self._settings)
+        self._stt: SpeechToTextProvider | None = None
         self._intent_extractor = get_intent_extractor(self._settings)
         self._normalizer = CommandNormalizer()
         self._memory = SessionMemory(self._settings)
         self._enricher = ContextEnricher(self._memory)
         self._tts = get_tts_provider(self._settings)
         self._orchestrator = WorkspaceOrchestrator(self._settings)
+
+    def _get_stt(self) -> SpeechToTextProvider:
+        if self._stt is None:
+            self._stt = get_stt_provider(self._settings)
+        return self._stt
 
     async def process_audio(
         self,
@@ -34,13 +40,21 @@ class VoiceAgentPipeline:
         incident_context: dict | None = None,
         include_tts: bool | None = None,
     ) -> VoiceProcessResponse:
-        transcription = await self._stt.transcribe(audio_bytes, filename=filename)
+        transcription = await self.transcribe_audio(audio_bytes, filename=filename)
         return await self.process_text(
             transcription.text,
             session_id=session_id,
             incident_context=incident_context,
             include_tts=include_tts,
         )
+
+    async def transcribe_audio(
+        self,
+        audio_bytes: bytes,
+        *,
+        filename: str = "audio.wav",
+    ) -> TranscriptionResult:
+        return await self._get_stt().transcribe(audio_bytes, filename=filename)
 
     async def process_text(
         self,
@@ -69,7 +83,9 @@ class VoiceAgentPipeline:
             incident_context=incident_context,
         )
 
-        orchestrator_result = await self._orchestrator.execute(command, transcript)
+        orchestrator_result = start_demo_gate_from_text(transcript, self._settings)
+        if orchestrator_result is None:
+            orchestrator_result = await self._orchestrator.execute(command, transcript)
 
         response_text = build_response_text(intent, command, context, orchestrator_result)
         use_tts = include_tts if include_tts is not None else self._settings.tts_on_voice

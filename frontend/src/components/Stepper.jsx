@@ -1,9 +1,22 @@
-import { Check, GitPullRequest, RocketLaunch, ShieldCheck } from '@phosphor-icons/react'
+import {
+  Check,
+  ClipboardText,
+  Database,
+  GitBranch,
+  ShieldCheck,
+  Sparkle,
+  TestTube,
+  Waveform,
+} from '@phosphor-icons/react'
 
 const STEP_ICON = {
-  pr: GitPullRequest,
-  deploy: RocketLaunch,
-  verify: ShieldCheck,
+  capture: Waveform,
+  memory: Database,
+  proposal: Sparkle,
+  approval: ShieldCheck,
+  test: TestTube,
+  branch: GitBranch,
+  handoff: ClipboardText,
 }
 
 export default function Stepper({ steps }) {
