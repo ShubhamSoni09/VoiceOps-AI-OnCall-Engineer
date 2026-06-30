@@ -16,6 +16,7 @@ router = APIRouter(prefix="/voice", tags=["voice-agent"])
 
 _pipeline: VoiceAgentPipeline | None = None
 _pipeline_settings: Settings | None = None
+_pipeline_cache: dict[str, VoiceAgentPipeline] = {}
 
 _AUTO_EXTERNAL_SOURCE = "voice_auto_external_assignment"
 _AUTO_EXTERNAL_AGENT_ID = "auto"
@@ -69,9 +70,14 @@ def _scoped_session_id(room_id: str, user: UserPublic, session_id: str) -> str:
 
 def get_pipeline(settings: Settings = Depends(get_settings)) -> VoiceAgentPipeline:
     global _pipeline, _pipeline_settings
-    if _pipeline is None or _pipeline_settings != settings:
+    if _pipeline is None:
+        _pipeline_cache.clear()
+    cache_key = settings.model_dump_json()
+    _pipeline = _pipeline_cache.get(cache_key)
+    if _pipeline is None:
         _pipeline = VoiceAgentPipeline(settings=settings)
-        _pipeline_settings = settings
+        _pipeline_cache[cache_key] = _pipeline
+    _pipeline_settings = settings
     return _pipeline
 
 
@@ -106,7 +112,7 @@ async def process_audio(
         _ensure_room_access(room_id, user, collab)
         user_settings = llm_connections.settings_for_user(user, settings)
         room_settings = collab.settings_for_room(room_id, user_settings)
-        active_pipeline = pipeline if room_settings == settings else VoiceAgentPipeline(settings=room_settings)
+        active_pipeline = pipeline if room_settings == settings else get_pipeline(room_settings)
         use_tts = include_tts.strip().lower() in {"true", "1", "yes"}
         transcription = await active_pipeline.transcribe_audio(
             audio_bytes,
@@ -168,7 +174,7 @@ async def process_text(
         _ensure_room_access(body.room_id, user, collab)
         user_settings = llm_connections.settings_for_user(user, settings)
         room_settings = collab.settings_for_room(body.room_id, user_settings)
-        active_pipeline = pipeline if room_settings == settings else VoiceAgentPipeline(settings=room_settings)
+        active_pipeline = pipeline if room_settings == settings else get_pipeline(room_settings)
         incident_context = dict(body.incident_context)
         incident_context["room_id"] = body.room_id
         resolved_context = collab.resolve_recent_task_context(body.room_id, body.text)
@@ -212,9 +218,13 @@ async def clear_session(
     room_id: str = Query(default="main"),
     user: UserPublic = Depends(require_permission("voice:use")),
     collab: CollaborationService = Depends(get_collaboration_service),
-    pipeline: VoiceAgentPipeline = Depends(get_pipeline),
+    settings: Settings = Depends(get_settings),
+    llm_connections: LLMConnectionService = Depends(get_llm_connection_service),
 ) -> dict:
     _ensure_room_access(room_id, user, collab)
+    user_settings = llm_connections.settings_for_user(user, settings)
+    room_settings = collab.settings_for_room(room_id, user_settings)
+    pipeline = get_pipeline(room_settings)
     pipeline.clear_session(_scoped_session_id(room_id, user, session_id))
     return {"status": "cleared", "session_id": session_id}
 

@@ -178,3 +178,16 @@ The meeting closure harness proves that voice-created `auto` external assignment
 ## Frontend
 
 The right rail `Connected agents` panel shows Claude Code, OpenAI Codex, Cursor, and local/open-source connection status. It can start OAuth for providers that support it, register local CLI mode, request a provider recommendation, and submit a patch prompt to the selected connected provider. The Work Dashboard assignment queue shows auto-route metadata such as recommended provider, model, confidence, and readiness. The resulting patch appears in the normal Agent actions approval queue.
+
+## New Clone Path
+
+For the shortest end-to-end setup path, use `docs/GETTING_STARTED.md`.
+
+In the UI:
+
+- `LLM providers` connects real reasoning models.
+- `Connected agents` connects Claude/Codex/Cursor/local coding tools.
+- `Repository setup` connects a GitHub URL or local clone.
+- `Sign in with GitHub` is available when GitHub OAuth is configured; otherwise use `GITHUB_TOKEN`, `GH_TOKEN`, or an authenticated `gh` CLI.
+
+Skipped by design: VoiceOps does not fake provider OAuth or collect browser sessions. If a provider only exposes local CLI auth, the one-click step is saving the CLI command after the user authenticates that tool outside VoiceOps.

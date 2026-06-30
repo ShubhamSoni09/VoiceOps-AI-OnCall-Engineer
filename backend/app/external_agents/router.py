@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+import html
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import HTMLResponse
 
 from app.auth.dependencies import get_current_user, require_permission
 from app.auth.models import UserPublic
@@ -112,6 +115,29 @@ async def complete_external_agent_oauth(
     service: ExternalAgentService = Depends(get_external_agent_service),
 ) -> ExternalAgentCredentialPublic:
     return await service.complete_oauth(user, body)
+
+
+@router.get("/oauth/callback")
+async def complete_external_agent_oauth_redirect(
+    provider: ExternalAgentProvider,
+    code: str = Query(default=""),
+    state: str = Query(default=""),
+    service: ExternalAgentService = Depends(get_external_agent_service),
+) -> HTMLResponse:
+    if not code or not state:
+        return HTMLResponse(
+            f"<h1>{html.escape(provider.value)} connection failed</h1><p>OAuth code and state are required.</p>",
+            status_code=400,
+        )
+    try:
+        credential = await service.complete_oauth_redirect(provider, code=code, state=state)
+    except HTTPException as exc:
+        return HTMLResponse(
+            f"<h1>{html.escape(provider.value)} connection failed</h1><p>{html.escape(str(exc.detail))}</p>",
+            status_code=exc.status_code,
+        )
+    account = html.escape(credential.account_label or provider.value)
+    return HTMLResponse(f"<h1>{html.escape(provider.value)} connected</h1><p>{account} is ready. You can close this window.</p>")
 
 
 @router.delete("/providers/{provider}/credential", status_code=status.HTTP_204_NO_CONTENT)

@@ -78,6 +78,7 @@ describe('PushToTalk', () => {
   it('uses meeting-oriented idle copy instead of production incident copy', () => {
     const html = renderPushToTalk()
 
+    expect(html).toContain('aria-label="Command dock"')
     expect(html).toContain('Ready for text or voice')
     expect(html).toContain('Ask memory, request a patch, or run tests.')
     expect(html).toContain('placeholder="Ask memory, patch, or tests"')

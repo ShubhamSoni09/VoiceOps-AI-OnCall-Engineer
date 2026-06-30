@@ -58,6 +58,8 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
     await page.goto(`${webUrl}/react?live_smoke=1&e2e=${Date.now()}`, { waitUntil: 'domcontentloaded' })
 
+    await page.getByLabel('Email', { exact: true }).fill('admin@voiceops.dev')
+    await page.getByLabel('Password', { exact: true }).fill('admin123')
     await page.getByRole('button', { name: /^sign in$/i }).click()
     await expect(page.getByRole('heading', { name: 'Team room' })).toBeVisible({ timeout: 30_000 })
     await openRuntimeDiagnostics(page)

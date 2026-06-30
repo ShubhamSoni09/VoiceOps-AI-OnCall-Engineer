@@ -84,7 +84,7 @@ async function main() {
     await expect(page.getByText('SPEAKER_09').first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText('Confirm speaker')).toBeVisible()
 
-    const speakerRow = page.locator('.unknown-speaker').filter({ hasText: 'SPEAKER_09' })
+    const speakerRow = page.locator('.unknown-speaker').filter({ hasText: 'SPEAKER_09', has: page.locator('select') })
     await expect(speakerRow).toHaveCount(1)
     await speakerRow.locator('select').selectOption('user-priya')
 

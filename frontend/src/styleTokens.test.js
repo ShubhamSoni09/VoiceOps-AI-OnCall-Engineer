@@ -5,9 +5,22 @@ import { describe, expect, it } from 'vitest'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const stylesheetPath = path.join(__dirname, 'index.css')
+const packagePath = path.join(__dirname, '..', 'package.json')
 
 function readStylesheet() {
   return fs.readFileSync(stylesheetPath, 'utf8')
+}
+
+function readPackage() {
+  return JSON.parse(fs.readFileSync(packagePath, 'utf8'))
+}
+
+function sourceFiles(dir = __dirname) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) return sourceFiles(fullPath)
+    return /\.(css|jsx?)$/.test(entry.name) ? [fullPath] : []
+  })
 }
 
 function themeTokens(css, selector) {
@@ -127,12 +140,79 @@ describe('CSS design tokens', () => {
     expect(css).toMatch(/button:disabled\s*\{[^}]*cursor:\s*not-allowed;[^}]*\}/)
   })
 
+  it('keeps native cursors instead of custom cursor decoration', () => {
+    const css = readStylesheet()
+
+    expect(css).not.toMatch(/cursor:\s*(url|none)\b/)
+  })
+
   it('keeps action cards border-led instead of pairing borders with large shadows', () => {
     const css = readStylesheet()
     const actionRule = css.match(/\.action\s*\{([^}]*)\}/)?.[1] || ''
 
     expect(actionRule).toContain('border: 1px solid var(--line-strong)')
     expect(actionRule).not.toMatch(/box-shadow|--shadow-card/)
+  })
+
+  it('keeps the app shell quiet instead of adding landing-page decoration', () => {
+    const css = readStylesheet()
+    const appRule = css.match(/\.app\s*\{([^}]*)\}/)?.[1] || ''
+    const loginWrapRule = css.match(/\.login-wrap\s*\{([^}]*)\}/)?.[1] || ''
+
+    expect(appRule).toContain('height: 100dvh')
+    expect(loginWrapRule).toContain('min-height: 100dvh')
+    expect(css).not.toMatch(/\b100vh\b/)
+    expect(css).not.toMatch(/radial-gradient|backdrop-filter|filter:\s*blur/)
+  })
+
+  it('keeps one lightweight icon family instead of stacking UI kits', () => {
+    const dependencies = readPackage().dependencies || {}
+
+    expect(dependencies).toHaveProperty('@phosphor-icons/react')
+    expect(Object.keys(dependencies).sort()).not.toEqual(
+      expect.arrayContaining([
+        '@chakra-ui/react',
+        '@mui/material',
+        'antd',
+        'lucide-react',
+        '@mantine/core',
+      ]),
+    )
+  })
+
+  it('keeps visible copy plain by avoiding em and en dashes', () => {
+    const offenders = sourceFiles()
+      .filter((file) => /[\u2014\u2013]/.test(fs.readFileSync(file, 'utf8')))
+      .map((file) => path.relative(__dirname, file))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('uses icons and text instead of emoji decoration', () => {
+    const emojiPattern = /[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u
+    const offenders = sourceFiles()
+      .filter((file) => emojiPattern.test(fs.readFileSync(file, 'utf8')))
+      .map((file) => path.relative(__dirname, file))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('uses the icon library instead of hand-rolled SVG markup', () => {
+    const offenders = sourceFiles()
+      .filter((file) => !/\.test\./.test(file))
+      .filter((file) => /<svg\b|<path\b/.test(fs.readFileSync(file, 'utf8')))
+      .map((file) => path.relative(__dirname, file))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('honors reduced motion for all signal animations', () => {
+    const css = readStylesheet()
+    const reducedMotionBlock = css.match(/@media \(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+
+    expect(css).toMatch(/@keyframes\s+\w+/)
+    expect(reducedMotionBlock).toContain('animation: none !important')
+    expect(reducedMotionBlock).toContain('transition: none !important')
   })
 
   it('keeps form placeholders readable instead of using ghost text', () => {
@@ -214,7 +294,7 @@ describe('CSS design tokens', () => {
     const css = readStylesheet()
     const tabletBlock = css.match(/@media \(max-width: 880px\)\s*\{([\s\S]*?)@media \(max-width: 520px\)/m)?.[1] || ''
 
-    expect(tabletBlock).toMatch(/\.body\s*\{[^}]*grid-template-rows:\s*clamp\(132px,\s*18dvh,\s*176px\) minmax\(280px,\s*1fr\) clamp\(240px,\s*32dvh,\s*320px\);/)
+    expect(tabletBlock).toMatch(/\.body\s*\{[^}]*grid-template-rows:\s*clamp\(112px,\s*14dvh,\s*132px\) minmax\(190px,\s*1fr\) clamp\(150px,\s*26dvh,\s*190px\);/)
     expect(tabletBlock).not.toMatch(/grid-template-rows:[^;]*minmax\(0,\s*1fr\)/)
   })
 
@@ -241,7 +321,7 @@ describe('CSS design tokens', () => {
 
     expect(mobileBlock).toMatch(/\.feed\s*\{[^}]*flex:\s*1 1 0;[^}]*padding:\s*12px 14px 18px;/)
     expect(mobileBlock).toMatch(/\.stepper\s*\{[^}]*padding:\s*6px 18px 7px;/)
-    expect(mobileBlock).toMatch(/\.ptt\s*\{[^}]*min-height:\s*76px;/)
+    expect(mobileBlock).toMatch(/\.ptt\s*\{[^}]*min-height:\s*68px;/)
   })
 
   it('keeps handoff summaries compact in the right rail', () => {
@@ -268,7 +348,7 @@ describe('CSS design tokens', () => {
     expect(css).toMatch(/\.workdash-assignment-details > summary,\s*\.workdash-queue-details > summary\s*\{[^}]*min-height:\s*28px;/)
     expect(css).toMatch(/\.memory-query input\s*\{[^}]*min-height:\s*28px;/)
     expect(css).toMatch(/\.memory-query button\s*\{[^}]*height:\s*28px;/)
-    expect(css).toMatch(/\.command-entry button\s*\{[^}]*width:\s*30px;[^}]*height:\s*28px;/)
+    expect(css).toMatch(/\.command-entry button\s*\{[^}]*width:\s*36px;[^}]*height:\s*36px;/)
     expect(css).toMatch(/\.action-audit-details summary\s*\{[^}]*min-height:\s*28px;[^}]*display:\s*inline-flex;/)
   })
 
@@ -294,7 +374,8 @@ describe('CSS design tokens', () => {
     expect(mobileBlock).toMatch(/\.ptt\.voice-unavailable\.voice-retryable\s*\{[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\) auto;/)
     expect(mobileBlock).toMatch(/\.ptt\.voice-unavailable\.voice-retryable \.ptt-actions\s*\{[^}]*display:\s*flex;[^}]*min-width:\s*72px;/)
     expect(mobileBlock).toMatch(/\.ptt\.voice-unavailable\.voice-retryable \.live-meeting\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*72px;/)
-    expect(mobileBlock).toMatch(/\.ptt\.voice-unavailable\.voice-retryable \.live-meeting span\s*\{[^}]*display:\s*inline;/)
+    expect(mobileBlock).toMatch(/\.ptt\.voice-unavailable\.voice-retryable \.live-meeting \.live-label-full\s*\{[^}]*display:\s*none;/)
+    expect(mobileBlock).toMatch(/\.ptt\.voice-unavailable\.voice-retryable \.live-meeting \.live-label-short\s*\{[^}]*display:\s*inline;/)
     expect(mobileBlock).toMatch(/\.ptt\.voice-unavailable\.voice-blocked \.ptt-actions\s*\{[^}]*display:\s*none;/)
     expect(mobileBlock).toMatch(/\.ptt\.voice-unavailable \.ptt-voice-warning\s*\{[^}]*width:\s*100%;/)
   })
@@ -312,25 +393,29 @@ describe('CSS design tokens', () => {
 
   it('keeps phone access to work status and approvals without showing the full right rail console', () => {
     const css = readStylesheet()
+    const tabletBlock = css.match(/@media \(max-width: 880px\)\s*\{([\s\S]*?)@media \(max-width: 520px\)/m)?.[1] || ''
     const mobileBlock = css.match(/@media \(max-width: 520px\)\s*\{([\s\S]*?)\/\* ============================================================/m)?.[1] || ''
 
     expect(css).toMatch(/\.workdash-status-strip\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/)
     expect(css).toMatch(/\.workdash-status-cell\s*\{[^}]*padding:\s*7px 7px 6px;/)
+    expect(tabletBlock).toMatch(/\.rail--right \.rail-section\s*\{[^}]*display:\s*none;/)
+    expect(tabletBlock).toMatch(/\.rail--right \.rail-section--workdash,\s*\.rail--right \.rail-section--actions\s*\{[^}]*display:\s*block;/)
+    expect(tabletBlock).toMatch(/\.rail--right \.ai-coworker,\s*\.rail--right \.setup-action-strip,\s*\.rail--right \.rail-section--memory,\s*\.rail--right \.rail-section--handoff,\s*\.rail--right > \.scroll > \.rail-section-details\s*\{[^}]*display:\s*none;/)
+    expect(tabletBlock).toMatch(/\.rail--right \.workdash > :not\(\.workdash-next\)\s*\{[^}]*display:\s*none;/)
+    expect(tabletBlock).toMatch(/\.rail--right \.rail-section--actions\.rail-section--empty-actions,\s*\.rail--right \.rail-section--actions\.rail-section--no-pending-actions,\s*\.rail--right \.rail-section--actions \.panel-empty\s*\{[^}]*display:\s*none;/)
     expect(mobileBlock).toMatch(/\.rail--right\s*\{[^}]*display:\s*flex;/)
     expect(mobileBlock).toMatch(/\.rail--right \.rail-section\s*\{[^}]*display:\s*none;/)
     expect(mobileBlock).toMatch(/\.rail--right \.rail-section--workdash\s*\{[^}]*display:\s*block;[^}]*order:\s*3;/)
     expect(mobileBlock).toMatch(/\.rail--right \.rail-section--actions\s*\{[^}]*display:\s*block;[^}]*order:\s*4;/)
-    expect(mobileBlock).toMatch(/\.rail--right \.rail-section--memory\s*\{[^}]*display:\s*block;[^}]*order:\s*2;/)
+    expect(mobileBlock).toMatch(/\.rail--right \.rail-section--memory\s*\{[^}]*display:\s*none;[^}]*order:\s*2;/)
     expect(mobileBlock).toMatch(/\.rail--right \.scroll\s*\{[^}]*padding:\s*8px 10px;[^}]*gap:\s*0;/)
     expect(css).toMatch(/\.ai-coworker\s*\{[^}]*display:\s*grid;[^}]*background:\s*var\(--elev\);/)
-    expect(mobileBlock).toMatch(/\.rail--right \.ai-coworker\s*\{[^}]*order:\s*1;/)
-    expect(mobileBlock).toMatch(/\.rail--right \.ai-coworker\s*\{[^}]*gap:\s*5px;[^}]*padding:\s*7px;/)
-    expect(mobileBlock).toMatch(/\.rail--right \.ai-coworker-chips\s*\{[^}]*display:\s*none;/)
+    expect(mobileBlock).toMatch(/\.rail--right \.ai-coworker\s*\{[^}]*display:\s*none;/)
     expect(css).toMatch(/\.setup-runway-card\s*\{[^}]*grid-column:\s*1 \/ -1;[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\) auto auto;/)
     expect(css).toMatch(/\.setup-action-details > summary\s*\{[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\);/)
     expect(css).toMatch(/\.setup-action-detail-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/)
     expect(mobileBlock).toMatch(/\.rail--right \.setup-action-strip\s*\{[^}]*display:\s*none;[^}]*padding:\s*5px 7px;[^}]*gap:\s*5px;/)
-    expect(mobileBlock).toMatch(/\.rail--right \.setup-action-strip\.blocked,\s*\.rail--right \.setup-action-strip\.attention\s*\{[^}]*display:\s*grid;[^}]*order:\s*2;/)
+    expect(mobileBlock).toMatch(/\.rail--right \.setup-action-strip\.blocked,\s*\.rail--right \.setup-action-strip\.attention\s*\{[^}]*display:\s*none;/)
     expect(mobileBlock).toMatch(/\.rail--right \.setup-action-strip \.setup-runway-card > small,\s*\.rail--right \.setup-action-strip \.setup-action-details\s*\{[^}]*display:\s*none;/)
     expect(mobileBlock).toMatch(/\.rail--right \.setup-action-cell small\s*\{[^}]*display:\s*none;/)
     expect(mobileBlock).toMatch(/\.rail--right \.workdash\s*\{[^}]*padding:\s*7px 8px;[^}]*gap:\s*0;/)
@@ -342,7 +427,7 @@ describe('CSS design tokens', () => {
     expect(mobileBlock).toMatch(/\.rail--right \.action-title\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*baseline;/)
     expect(mobileBlock).toMatch(/\.rail--right \.action-summary\s*\{[^}]*-webkit-line-clamp:\s*1;/)
     expect(mobileBlock).toMatch(/\.rail--right \.action-audit-details\s*\{[^}]*display:\s*none;/)
-    expect(mobileBlock).toMatch(/\.rail--right \.rail-section--actions\.rail-section--empty-actions\s*\{[^}]*display:\s*none;/)
+    expect(mobileBlock).toMatch(/\.rail--right \.rail-section--actions\.rail-section--empty-actions,\s*\.rail--right \.rail-section--actions\.rail-section--no-pending-actions\s*\{[^}]*display:\s*none;/)
     expect(mobileBlock).toMatch(/\.rail--right \.rail-section--actions \.panel-empty\s*\{[^}]*display:\s*none;/)
     expect(mobileBlock).toMatch(/\.rail--right \.memory-panel\s*\{[^}]*padding-top:\s*7px;[^}]*border-top:\s*1px solid var\(--line\);/)
     expect(mobileBlock).toMatch(/\.rail--right \.memory-query\s*\{[^}]*height:\s*30px;/)
@@ -355,7 +440,7 @@ describe('CSS design tokens', () => {
     const mobileBlock = css.match(/@media \(max-width: 520px\)\s*\{([\s\S]*?)\/\* ============================================================/m)?.[1] || ''
 
     expect(mobileBlock).toMatch(/\.rail--right details > summary,\s*\.feed-history summary\s*\{[^}]*min-height:\s*28px;/)
-    expect(mobileBlock).toMatch(/\.command-entry button\s*\{[^}]*width:\s*30px;[^}]*height:\s*28px;/)
-    expect(mobileBlock).toMatch(/\.command-entry input\s*\{[^}]*min-height:\s*28px;/)
+    expect(mobileBlock).toMatch(/\.command-entry button\s*\{[^}]*width:\s*30px;[^}]*height:\s*30px;/)
+    expect(mobileBlock).toMatch(/\.command-entry input\s*\{[^}]*min-height:\s*30px;/)
   })
 })

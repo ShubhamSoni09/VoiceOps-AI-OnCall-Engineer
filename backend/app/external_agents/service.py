@@ -325,7 +325,7 @@ class ExternalAgentService:
         _ensure_auth_method_supported(provider, ExternalAgentAuthMethod.OAUTH)
         _prune_expired_oauth_states()
         state = secrets.token_urlsafe(24)
-        redirect_uri = body.redirect_uri or f"{self._settings.external_agent_oauth_redirect_base_url.rstrip('/')}/external-agents/oauth/callback"
+        redirect_uri = _oauth_redirect_uri(self._settings, provider, body.redirect_uri)
         authorize_url = _oauth_authorize_url(self._settings, provider)
         client_id = _oauth_client_id(self._settings, provider)
         mode = "configured" if client_id and _oauth_token_url(self._settings, provider) else "mock_exchange"
@@ -369,11 +369,36 @@ class ExternalAgentService:
         user: UserPublic,
         body: ExternalAgentOAuthCallbackRequest,
     ) -> ExternalAgentCredentialPublic:
+        return await self._complete_oauth_for_user(user.id, body)
+
+    async def complete_oauth_redirect(
+        self,
+        provider: ExternalAgentProvider,
+        *,
+        code: str,
+        state: str,
+    ) -> ExternalAgentCredentialPublic:
+        return await self._complete_oauth_for_user(
+            "",
+            ExternalAgentOAuthCallbackRequest(provider=provider, code=code, state=state),
+            trust_state_user=True,
+        )
+
+    async def _complete_oauth_for_user(
+        self,
+        user_id: str,
+        body: ExternalAgentOAuthCallbackRequest,
+        *,
+        trust_state_user: bool = False,
+    ) -> ExternalAgentCredentialPublic:
         self._ensure_allowed(body.provider)
         _prune_expired_oauth_states()
         pending = _pending_oauth_states.pop(body.state, None)
-        if not pending or pending["provider"] != body.provider.value or pending["user_id"] != user.id:
+        state_user_id = str((pending or {}).get("user_id") or "")
+        if not pending or pending["provider"] != body.provider.value or (not trust_state_user and state_user_id != user_id):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state")
+        # ponytail: browser OAuth callback has no bearer token; the unguessable state binds it to the starter user.
+        credential_user_id = state_user_id if trust_state_user else user_id
         now = _now()
         mode = pending["mode"]
         token_payload = (
@@ -403,7 +428,7 @@ class ExternalAgentService:
         )
         record = ExternalAgentCredentialRecord(
             id=f"xag-{uuid4().hex[:12]}",
-            user_id=user.id,
+            user_id=credential_user_id,
             provider=body.provider,
             auth_method=ExternalAgentAuthMethod.OAUTH,
             account_label=body.account_label or f"{PROVIDER_LABELS[body.provider]} OAuth",
@@ -1480,6 +1505,14 @@ def _readiness(
 
 def _oauth_authorize_url(settings: Settings, provider: ExternalAgentProvider) -> str:
     return getattr(settings, f"{provider.value}_oauth_authorize_url")
+
+
+def _oauth_redirect_uri(settings: Settings, provider: ExternalAgentProvider, override: str | None = None) -> str:
+    uri = (override or f"{settings.external_agent_oauth_redirect_base_url.rstrip('/')}/external-agents/oauth/callback").strip()
+    if "provider=" in uri:
+        return uri
+    separator = "&" if "?" in uri else "?"
+    return f"{uri}{separator}provider={provider.value}"
 
 
 def _oauth_token_url(settings: Settings, provider: ExternalAgentProvider) -> str | None:

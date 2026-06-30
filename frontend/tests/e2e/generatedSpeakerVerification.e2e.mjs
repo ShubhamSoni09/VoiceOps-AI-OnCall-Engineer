@@ -52,6 +52,8 @@ async function main() {
     const routeState = await installGeneratedVerificationRoutes(page, tempRoot, workspace)
     await page.goto(`${webUrl}/react?generated_speaker_verification_e2e=${Date.now()}&live_smoke=1`)
 
+    await page.getByLabel('Email', { exact: true }).fill('admin@voiceops.dev')
+    await page.getByLabel('Password', { exact: true }).fill('admin123')
     await page.getByRole('button', { name: /^sign in$/i }).click()
     await expect(page.getByRole('heading', { name: 'Team room' })).toBeVisible({ timeout: 30_000 })
     await openSystemDetails(page)
@@ -107,10 +109,10 @@ async function openSystemDetails(page) {
   if (!(await systemDetails.evaluate((node) => node.open))) {
     await systemDetails.locator('summary').first().click()
   }
-  const runtimeDetails = systemDetails.locator('details.diagnostic-details', { hasText: 'Runtime diagnostics' })
-  await expect(runtimeDetails).toBeVisible({ timeout: 30_000 })
-  if (!(await runtimeDetails.evaluate((node) => node.open))) {
-    await runtimeDetails.locator('summary').first().click()
+  const operatorDetails = systemDetails.locator('details.diagnostic-details', { hasText: 'Operator diagnostics' })
+  await expect(operatorDetails).toBeVisible({ timeout: 30_000 })
+  if (!(await operatorDetails.evaluate((node) => node.open))) {
+    await operatorDetails.locator('summary').first().click()
   }
 }
 

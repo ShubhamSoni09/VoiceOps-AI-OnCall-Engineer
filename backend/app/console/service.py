@@ -5,6 +5,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from app.config import Settings
+from app.workspace.github import github_workspace_metadata, is_github_workspace
 from app.workspace.tools import configured_workspace_is_url
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -44,8 +46,6 @@ class ConsoleBootstrap(BaseModel):
 
 
 def _run_git(workspace: Path, *args: str) -> str | None:
-    if not (workspace / ".git").exists():
-        return None
     try:
         result = subprocess.run(
             ["git", *args],
@@ -89,6 +89,22 @@ def resolve_configured_workspace(configured: str | None) -> Path | None:
 
 def get_workspace_info(configured: str | None, *, source: str = "none") -> WorkspaceInfo:
     configured_value = configured.strip() if configured and configured.strip() else None
+    if is_github_workspace(configured_value):
+        meta = github_workspace_metadata(Settings(voiceops_workspace=configured_value), configured_value)
+        return WorkspaceInfo(
+            connected=True,
+            configured_workspace=configured_value,
+            source=source,
+            persistence_note=_workspace_persistence_note(source),
+            path=None,
+            name=meta["name"],
+            branch=meta["branch"],
+            remote_url=meta["remote_url"],
+            remote_kind="github",
+            remote_web_url=meta["web_url"],
+            is_git_repo=True,
+            readme_line=None,
+        )
     if configured_workspace_is_url(configured_value):
         return WorkspaceInfo(
             connected=False,
@@ -109,7 +125,7 @@ def get_workspace_info(configured: str | None, *, source: str = "none") -> Works
 
     branch = _run_git(root, "branch", "--show-current")
     remote = _run_git(root, "remote", "get-url", "origin")
-    is_git = (root / ".git").exists()
+    is_git = _run_git(root, "rev-parse", "--is-inside-work-tree") == "true"
     remote_kind, remote_web_url = _remote_metadata(remote)
 
     return WorkspaceInfo(
@@ -162,7 +178,7 @@ def build_integrations(workspace: WorkspaceInfo) -> list[IntegrationStatus]:
             id="mcp",
             label="MCP workspace",
             connected=True,
-            detail=workspace.name,
+            detail=workspace.name if workspace.path else "GitHub direct",
         ),
         IntegrationStatus(id="render", label="Render", connected=False, detail="Not configured"),
         IntegrationStatus(id="clickhouse", label="ClickHouse", connected=False, detail="Not configured"),

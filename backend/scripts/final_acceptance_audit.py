@@ -154,12 +154,28 @@ def _source_audit_integrity_item(product: dict, onboarding: Any) -> AcceptanceIt
         ],
         source="product_audit + target_readiness + team_onboarding_check",
     )
-    if not product.get("ready"):
-        item.gaps.extend(product.get("next_steps") or ["Product audit is not ready."])
+    item.gaps.extend(_product_acceptance_gaps(product, target_gaps))
     item.gaps.extend(target_gaps)
     if not onboarding.ready:
         item.gaps.extend(onboarding.next_steps or ["Team onboarding check is not ready."])
     return _finalize(item)
+
+
+def _product_acceptance_gaps(product: dict, target_gaps: list[str]) -> list[str]:
+    if product.get("ready"):
+        return []
+    failed = [
+        item for item in product.get("items") or []
+        if item.get("required", True) and item.get("status") != "passed"
+    ]
+    # ponytail: final acceptance already handles target diagnostics; don't fail twice for the accepted durable-store bootstrap gap.
+    if failed and all(item.get("id") == "production_runtime" for item in failed) and not target_gaps:
+        return []
+    gaps: list[str] = []
+    for item in failed:
+        gaps.extend(item.get("gaps") or [])
+    gaps.extend(product.get("next_steps") or [])
+    return list(dict.fromkeys(gaps)) or ["Product audit is not ready."]
 
 
 def _target_acceptance_evidence(target: dict, target_gaps: list[str]) -> list[str]:

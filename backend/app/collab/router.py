@@ -1,6 +1,5 @@
 import asyncio
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -47,15 +46,11 @@ from app.collab.models import (
 from app.collab.service import CollaborationService, get_collaboration_service
 from app.console.router import (
     WorkspaceCloneRequest,
-    _ensure_clone_target_inside_root,
-    _github_repo_name,
     _is_github_clone_url,
 )
 from app.config import Settings, get_settings
 from app.rag.providers import EmbeddingProviderError
-from app.redaction import redact_sensitive_text
 from app.voice_agent.meeting_router import MeetingCommandRouter
-from app.workspace.github import clone_github_repo
 from app.workspace.git import WorkspaceGitService
 from app.workspace.models import (
     CodeQueryRequest,
@@ -147,16 +142,9 @@ async def clone_room_workspace(
     remote_url = body.remote_url.strip()
     if not _is_github_clone_url(remote_url):
         raise HTTPException(status_code=400, detail="Clone URL must be a GitHub HTTPS or SSH repository URL.")
-    target = _room_clone_target(room_id, body.target_path, remote_url, settings)
-    if target.exists() and any(target.iterdir()):
-        raise HTTPException(status_code=409, detail="Target path already exists and is not empty.")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    result = await asyncio.to_thread(clone_github_repo, remote_url, target)
-    if result.returncode != 0:
-        detail = redact_sensitive_text(result.stderr or result.stdout or "git clone failed").strip()[-1000:]
-        raise HTTPException(status_code=409, detail=detail)
     try:
-        snapshot = service.update_room_workspace(room_id, str(target.resolve()))
+        # ponytail: keep endpoint compatibility; a GitHub URL is now the workspace binding.
+        snapshot = service.update_room_workspace(room_id, remote_url)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     await events.publish(room_id, "room_workspace_updated", actor_id=user.id)
@@ -668,19 +656,6 @@ async def handoff(
 ) -> HandoffSummary:
     _ensure_room_access(room_id, user, service)
     return service.build_handoff(room_id, user)
-
-
-def _room_clone_target(room_id: str, target_path: str | None, remote_url: str, settings: Settings) -> Path:
-    if target_path and target_path.strip():
-        target = Path(target_path.strip()).expanduser()
-        if not target.is_absolute():
-            raise HTTPException(status_code=400, detail="Target path must be absolute.")
-        return _ensure_clone_target_inside_root(target, settings)
-    repo_name = _github_repo_name(remote_url)
-    if not repo_name:
-        raise HTTPException(status_code=400, detail="Could not derive repository name from GitHub URL.")
-    safe_room = "".join(char if char.isalnum() or char in "-_." else "-" for char in room_id).strip(".") or "room"
-    return _ensure_clone_target_inside_root(settings.workspace_clone_root / safe_room / repo_name, settings)
 
 
 def _websocket_user(websocket: WebSocket) -> UserPublic:

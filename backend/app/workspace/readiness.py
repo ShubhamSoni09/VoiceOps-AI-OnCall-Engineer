@@ -4,8 +4,9 @@ from pathlib import Path
 
 from app.config import Settings
 from app.workspace.git import WorkspaceGitService
+from app.workspace.github import github_workspace_metadata, is_github_workspace
 from app.workspace.models import WorkspaceReadinessCheck, WorkspaceReadinessResponse
-from app.workspace.tools import configured_workspace_is_url, resolve_configured_workspace
+from app.workspace.tools import resolve_configured_workspace
 
 
 class WorkspaceReadinessService:
@@ -14,16 +15,23 @@ class WorkspaceReadinessService:
 
     def inspect(self) -> WorkspaceReadinessResponse:
         configured = self._settings.voiceops_workspace
-        if configured_workspace_is_url(configured):
+        if is_github_workspace(configured):
+            meta = github_workspace_metadata(self._settings, configured)
             checks = [
-                _check(
-                    "workspace_configured",
-                    False,
-                    "error",
-                    "VOICEOPS_WORKSPACE must be a local clone path, not a GitHub or git remote URL.",
-                )
+                _check("workspace_configured", True, "ok", "GitHub repository URL is configured."),
+                _check("git_repo", True, "ok", "Connected directly to GitHub; no local checkout is required."),
+                _check("test_command", False, "warning", "Local tests are skipped; use GitHub PR checks."),
+                _check("branch_workflow", True, "ok", "Branches are created through the GitHub API on approval."),
             ]
-            return WorkspaceReadinessResponse(ready=False, workspace=configured, checks=checks)
+            return WorkspaceReadinessResponse(
+                ready=True,
+                workspace=configured,
+                root_name=meta["name"],
+                branch=meta["branch"],
+                dirty=False,
+                test_command=None,
+                checks=checks,
+            )
 
         root = resolve_configured_workspace(self._settings.voiceops_workspace)
         checks: list[WorkspaceReadinessCheck] = []

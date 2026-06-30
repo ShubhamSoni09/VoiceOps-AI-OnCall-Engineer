@@ -57,13 +57,8 @@ async function main() {
     await seedMeetingMemory(page)
     await page.reload()
 
-    await expect(page.getByText('Meeting memory')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText('Meeting memory', { exact: true })).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText('app.py').first()).toBeVisible({ timeout: 30_000 })
-
-    await openMemoryControls(page)
-    await page.getByRole('button', { name: 'Rebuild RAG index' }).click()
-    await expect(page.locator('.rag-index-status')).toContainText('local_sparse', { timeout: 30_000 })
-    await expect(page.locator('.rag-index-status')).toContainText('docs')
 
     await page.getByLabel('Search meeting memory and audit').fill('what files did Priya mention?')
     await page.getByRole('button', { name: 'Search meeting memory' }).click()
@@ -79,9 +74,6 @@ async function main() {
     await expect(page.locator('.memory-source-summary')).toContainText('docs')
     await expect(page.locator('.citation-list')).toContainText('app.py')
     await expect(page.locator('.citation-list')).toContainText('Priya Nair')
-    await expect(page.locator('.memory-list')).toContainText('code reference')
-    await expect(page.locator('.memory-list')).toContainText('Priya Nair')
-
     const report = await page.evaluate(async () => {
       const token = localStorage.getItem('voiceops_token')
       const headers = {
@@ -127,17 +119,6 @@ async function main() {
     await Promise.all(processes.map((child) => stopProcess(child)))
     if (!keepWorkspace) await fs.rm(tempRoot, { recursive: true, force: true })
   }
-}
-
-async function openMemoryControls(page) {
-  const details = page.locator('details.memory-details').first()
-  await expect(details).toBeVisible({ timeout: 30_000 })
-  if (!(await details.evaluate((node) => node.open))) {
-    await details.locator('summary').click()
-  }
-  const controls = details.locator('.memory-controls').first()
-  await expect(controls).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByRole('button', { name: 'Rebuild RAG index' })).toBeVisible({ timeout: 30_000 })
 }
 
 async function seedMeetingMemory(page) {

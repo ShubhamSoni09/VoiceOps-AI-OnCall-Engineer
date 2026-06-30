@@ -36,3 +36,54 @@ The React Speakers block fetches room state and validation together. It shows:
 - the next required calibration step.
 
 Manual mapping remains the source of truth for teammate identity in v1. Historical raw speaker labels stay auditable in message metadata.
+
+## Install Real Verification
+
+Local demo mode uses `SPEAKER_PROVIDER=mock`. Real verification requires WhisperX, pyannote access, and local audio tooling.
+
+1. Install system audio tooling:
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt-get update && sudo apt-get install -y ffmpeg
+```
+
+2. Create a Hugging Face token and accept the pyannote diarization model terms.
+
+3. Configure the backend:
+
+```env
+SPEAKER_PROVIDER=whisperx
+HF_TOKEN=...
+WHISPERX_DEVICE=cpu
+WHISPERX_WORKER_MODE=subprocess
+SPEAKER_VERIFICATION_TIMEOUT_SECONDS=300
+```
+
+4. Restart the backend, then use the right rail `Runtime` panel:
+
+- `Warm` loads the models before a live meeting.
+- `Generate sample` runs a generated two-speaker verification.
+- `Choose audio` plus `Verify` checks your own sample.
+
+5. Map unknown labels in the Speakers panel after verification.
+
+## Failure States
+
+| State | Meaning | Fix |
+| --- | --- | --- |
+| `not_verified` | WhisperX is configured but no valid verification evidence exists. | Run `Generate sample` or upload two-speaker audio. |
+| `failed` | Verification job crashed or timed out. | Check `HF_TOKEN`, pyannote access, ffmpeg, and increase `SPEAKER_VERIFICATION_TIMEOUT_SECONDS`. |
+| `weak` | Audio produced too few speakers or low-quality labels. | Use cleaner two-speaker audio and keep `2+ speakers` enabled. |
+| `invalid` | Saved verification evidence is malformed or stale. | Rerun verification from the Runtime panel. |
+| `calibration_needed` | Speaker labels exist but are not mapped to teammates. | Use the Speakers panel assignment controls. |
+
+CLI check:
+
+```bash
+cd backend
+HF_TOKEN=<token> python scripts/demo_operator.py --profile real-mac --run --timeout 300 --json
+```

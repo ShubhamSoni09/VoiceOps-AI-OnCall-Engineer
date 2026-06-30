@@ -74,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--run", action="store_true", help="Execute the selected profile.")
     parser.add_argument("--json", action="store_true", help="Print a machine-readable report.")
-    parser.add_argument("--timeout", type=int, default=300, help="Default per-command timeout in seconds.")
+    parser.add_argument("--timeout", type=int, default=600, help="Default per-command timeout in seconds.")
     parser.add_argument(
         "--keep-going",
         action="store_true",
@@ -181,7 +181,8 @@ def command_plan(profile: str, *, timeout: int = 300) -> list[OperatorCommand]:
             command=[python, "scripts/demo_readiness.py", "--timeout", str(timeout), "--json"],
             cwd=str(BACKEND_ROOT),
             env={**base_env, "SPEAKER_PROVIDER": "mock"},
-            timeout_seconds=max(timeout, 300),
+            # ponytail: demo_readiness applies timeout per inner gate; outer command just needs slack.
+            timeout_seconds=max(timeout + 300, 900),
         ),
         OperatorCommand(
             id="target_readiness",

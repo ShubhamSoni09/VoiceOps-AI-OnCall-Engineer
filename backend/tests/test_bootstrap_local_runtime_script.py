@@ -115,6 +115,38 @@ def test_bootstrap_local_runtime_cli_prints_json(tmp_path, monkeypatch, capsys):
     assert output["target_readiness_score"] == 100
 
 
+def test_bootstrap_local_runtime_can_seed_demo_room(tmp_path, monkeypatch):
+    workspace = _git_workspace(tmp_path)
+    (workspace / "app.py").write_text('print("ok")\n', encoding="utf-8")
+    env_path = tmp_path / ".env.local"
+    sqlite_path = tmp_path / "data" / "collaboration.sqlite3"
+    monkeypatch.setattr(bootstrap_local_runtime, "run_target_readiness", lambda **_kwargs: _target("ready", 100))
+
+    report = bootstrap_local_runtime.bootstrap_local_runtime(
+        env_file=env_path,
+        workspace=workspace,
+        collab_sqlite=sqlite_path,
+        seed_demo_room=True,
+    )
+
+    settings = bootstrap_local_runtime.Settings(_env_file=env_path)
+    service = bootstrap_local_runtime.CollaborationService(
+        bootstrap_local_runtime.create_collaboration_store(settings),
+        agent_display_name=settings.agent_display_name,
+        agent_initials=settings.agent_initials,
+        agent_wake_words=settings.agent_wake_words,
+    )
+    snapshot = service.snapshot("main")
+    dashboard = service.work_dashboard("main")
+
+    assert report.demo_seeded is True
+    assert snapshot.room.workspace_path == str(workspace.resolve())
+    assert len(snapshot.messages) == 3
+    assert len(snapshot.actions) == 1
+    assert snapshot.actions[0].pending_approval is True
+    assert dashboard.approvals
+
+
 def _git_workspace(tmp_path: Path) -> Path:
     workspace = tmp_path / "repo"
     workspace.mkdir()

@@ -116,7 +116,21 @@ export async function cloneWorkspace(remoteUrl, targetPath) {
     body: JSON.stringify({ remote_url: remoteUrl, target_path: targetPath || null }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.detail || `Workspace clone failed (${res.status})`)
+  if (!res.ok) throw new Error(data.detail || `GitHub connect failed (${res.status})`)
+  return data
+}
+
+export async function fetchGithubOAuthStatus() {
+  const res = await authFetch('/console/github/oauth/status')
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || `GitHub auth status failed (${res.status})`)
+  return data
+}
+
+export async function startGithubOAuth() {
+  const res = await authFetch('/console/github/oauth/start', { method: 'POST' })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || `GitHub auth start failed (${res.status})`)
   return data
 }
 
@@ -138,7 +152,7 @@ export async function cloneRoomWorkspace(roomId, remoteUrl, targetPath) {
     body: JSON.stringify({ remote_url: remoteUrl, target_path: targetPath || null }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.detail || `Room workspace clone failed (${res.status})`)
+  if (!res.ok) throw new Error(data.detail || `Room GitHub connect failed (${res.status})`)
   return data
 }
 

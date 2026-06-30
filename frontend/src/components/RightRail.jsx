@@ -2925,7 +2925,7 @@ export function PullRequestReadiness({ plan }) {
 }
 
 function ActionLogItem({ action, agentName, onApproveAction, onRejectAction, onCommitAction, onCreatePullRequest }) {
-  const [expanded, setExpanded] = useState(action.status === 'pending_approval')
+  const [expanded, setExpanded] = useState(false)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [commitMessage, setCommitMessage] = useState(() => defaultCommitMessage(action, agentName))
@@ -3135,7 +3135,7 @@ function ActionLogItem({ action, agentName, onApproveAction, onRejectAction, onC
           Diff preview
         </button>
       )}
-      {expanded && diff && <pre className="diff-preview" id={diffId}>{diff}</pre>}
+      {diff && <pre className="diff-preview" id={diffId} hidden={!expanded}>{diff}</pre>}
       {canCommit && (
         <form className="commit-form" onSubmit={commit}>
           <label htmlFor={`commit-${action.id}`}>Commit message</label>
@@ -3233,7 +3233,7 @@ function AgentTeamPanel({ runs = [], onCancelAgentRun }) {
     }
   }
   return (
-    <div>
+    <div className="agent-team-panel">
       <p className="section-lab">Agent team</p>
       <div className="agent-team" data-testid="agent-team">
         <div className="agent-team-head">
@@ -3631,6 +3631,10 @@ function ExternalAgentsPanel({
     <div>
       <p className="section-lab">Connected agents</p>
       <div className="external-agent-panel">
+        <div className="external-agent-hero">
+          <b>Connect Claude or Codex</b>
+          <small>They propose work here. Approval stays here.</small>
+        </div>
         <div className={`external-agent-summary ${panelSummary.tone}`} aria-label="Coding agent setup summary" title={panelSummary.detail}>
           <div>
             {panelSummary.tone === 'ready' ? <CheckCircle size={13} /> : <WarningCircle size={13} />}
@@ -3690,6 +3694,29 @@ function ExternalAgentsPanel({
                 <small className="external-agent-capability-boundary" title={capabilityBoundary.detail}>
                   <b>{capabilityBoundary.label}</b> {capabilityBoundary.detail}
                 </small>
+                {(canStartOAuth || canConfigureCli) && (
+                  <div className="external-agent-primary-actions">
+                    {canStartOAuth ? (
+                      <button
+                        type="button"
+                        disabled={Boolean(busy)}
+                        onClick={() => act(`${provider.provider}:oauth`, () => onStartOAuth(provider.provider))}
+                      >
+                        Connect
+                      </button>
+                    ) : null}
+                    {canConfigureCli ? (
+                      <button
+                        type="button"
+                        disabled={Boolean(busy)}
+                        onClick={() => setExpandedCliProvider((value) => value === provider.provider ? '' : provider.provider)}
+                        aria-expanded={cliExpanded}
+                      >
+                        Local CLI
+                      </button>
+                    ) : null}
+                  </div>
+                )}
                 <details className={`external-agent-details ${preflightClass(preflight)}`}>
                   <summary>
                     <span>Setup details</span>
@@ -3789,25 +3816,6 @@ function ExternalAgentsPanel({
                     </div>
                   )}
                   <div className="external-agent-actions">
-                    {canStartOAuth ? (
-                      <button
-                        type="button"
-                        disabled={Boolean(busy)}
-                        onClick={() => act(`${provider.provider}:oauth`, () => onStartOAuth(provider.provider))}
-                      >
-                        OAuth
-                      </button>
-                    ) : null}
-                    {canConfigureCli ? (
-                      <button
-                        type="button"
-                        disabled={Boolean(busy)}
-                        onClick={() => setExpandedCliProvider((value) => value === provider.provider ? '' : provider.provider)}
-                        aria-expanded={cliExpanded}
-                      >
-                        CLI setup
-                      </button>
-                    ) : null}
                     {onRunExternalAgent ? (
                       <button
                         type="button"
@@ -3818,7 +3826,7 @@ function ExternalAgentsPanel({
                           () => onRunExternalAgent(provider.provider, prompt, runMode, effectiveModel),
                         )}
                       >
-                        Run
+                        Try
                       </button>
                     ) : null}
                   </div>
@@ -4674,7 +4682,6 @@ function RepoConnectForm({ onConnectWorkspace, label = 'Local repository path', 
 
 function RepoCloneForm({ onCloneWorkspace }) {
   const [remoteUrl, setRemoteUrl] = useState('')
-  const [targetPath, setTargetPath] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -4684,11 +4691,10 @@ function RepoCloneForm({ onCloneWorkspace }) {
     setBusy(true)
     setError('')
     try {
-      await onCloneWorkspace(remoteUrl.trim(), targetPath.trim())
+      await onCloneWorkspace(remoteUrl.trim())
       setRemoteUrl('')
-      setTargetPath('')
     } catch (err) {
-      setError(err.message || 'Workspace clone failed')
+      setError(err.message || 'Repository connect failed')
     } finally {
       setBusy(false)
     }
@@ -4703,24 +4709,95 @@ function RepoCloneForm({ onCloneWorkspace }) {
         aria-label="GitHub repository URL"
         disabled={busy}
       />
-      <input
-        value={targetPath}
-        onChange={(event) => setTargetPath(event.target.value)}
-        placeholder="/absolute/path/under/clone-root"
-        aria-label="Optional absolute clone target path"
-        disabled={busy}
-      />
       <button type="submit" disabled={busy || !remoteUrl.trim()}>
-        {busy ? 'Cloning' : 'Clone'}
+        {busy ? 'Connecting' : 'Connect'}
       </button>
       {error && <small role="alert">{error}</small>}
-      <small>Leave blank for the managed clone root; custom paths must be absolute and inside it.</small>
-      <small>Private HTTPS repos use your local <code>gh auth login</code>; SSH URLs use your SSH keys.</small>
+      <small>VoiceOps will bind it directly without cloning. Use a local path only when you need local fallback.</small>
+      <small>Private repos use GitHub sign-in, <code>GITHUB_TOKEN</code>, or <code>GH_TOKEN</code>.</small>
     </form>
   )
 }
 
-function RepositorySetupPanel({ workspace, canConnectWorkspace = false, onConnectWorkspace, onCloneWorkspace }) {
+function GitHubAuthPanel({ githubOAuth, onConnectGithubOAuth }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const connected = Boolean(githubOAuth?.connected)
+  if (!onConnectGithubOAuth && !connected) return null
+
+  async function connect() {
+    if (!onConnectGithubOAuth || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await onConnectGithubOAuth()
+    } catch (err) {
+      setError(err.message || 'GitHub sign-in failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className={`github-auth-panel ${connected ? 'connected' : 'disconnected'}`}>
+      <div>
+        <b>{connected ? 'GitHub signed in' : 'Connect GitHub'}</b>
+        <small>{connected ? (githubOAuth.login || githubOAuth.source || 'ready') : 'For private repos and PRs'}</small>
+      </div>
+      {onConnectGithubOAuth && (
+        <button type="button" onClick={connect} disabled={busy}>
+          {busy ? 'Opening' : connected ? 'Reconnect GitHub' : 'Sign in with GitHub'}
+        </button>
+      )}
+      {error && <small role="alert">{error}</small>}
+    </div>
+  )
+}
+
+export function roomInviteUrl(roomId = 'main', locationLike = typeof window === 'undefined' ? null : window.location) {
+  const room = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(String(roomId || '')) ? String(roomId) : 'main'
+  const params = new URLSearchParams(String(locationLike?.search || ''))
+  ;['room_id', 'token', 'access_token', 'code', 'state'].forEach((key) => params.delete(key))
+  params.set('room', room)
+  return `${locationLike?.origin || ''}${locationLike?.pathname || '/'}?${params.toString()}`
+}
+
+function TeamInvitePanel({ roomId = 'main' }) {
+  const [status, setStatus] = useState('')
+  const url = roomInviteUrl(roomId)
+
+  async function copyInvite() {
+    try {
+      await navigator.clipboard.writeText(url)
+      setStatus('Copied')
+    } catch (_err) {
+      setStatus('Copy unavailable')
+    }
+  }
+
+  return (
+    <div className="rail-section rail-section--team-room">
+      <p className="section-lab">Team room</p>
+      <div className="team-invite">
+        <div>
+          <span><UsersThree size={14} /> Team invite</span>
+          <small title={url}>{roomId || 'main'} room link</small>
+        </div>
+        <button type="button" onClick={copyInvite}>Copy invite</button>
+        {status && <small className="team-invite-status">{status}</small>}
+      </div>
+    </div>
+  )
+}
+
+function RepositorySetupPanel({
+  workspace,
+  canConnectWorkspace = false,
+  onConnectWorkspace,
+  onCloneWorkspace,
+  githubOAuth,
+  onConnectGithubOAuth,
+}) {
   if (workspace?.connected !== false) return null
   const setupIssue = workspace?.setup_issue
   const commands = repoSetupCommands(workspace)
@@ -4730,41 +4807,42 @@ function RepositorySetupPanel({ workspace, canConnectWorkspace = false, onConnec
     <div className="repo-setup">
       <div className="repo-setup-head">
         <span><GitBranch size={14} /> Repository setup</span>
-        <small>local first</small>
+        <small>GitHub direct</small>
       </div>
-      <p>{setupIssue || 'Connect code actions by pointing the backend at a local clone of your GitHub repo.'}</p>
+      <p>{setupIssue || 'Connect code actions by pointing the backend at a GitHub repository URL or an existing local clone.'}</p>
       <div className="repo-setup-steps" aria-label="Repository setup steps">
         <div>
           <b>1</b>
-          <span>Clone the GitHub repo, or open an existing local clone</span>
+          <span>Connect a GitHub repo URL, or open an existing local clone</span>
         </div>
         <div>
           <b>2</b>
-          <span>Set <code>VOICEOPS_WORKSPACE</code> to that local folder, not the GitHub URL</span>
+          <span>Set <code>VOICEOPS_WORKSPACE</code> to the GitHub URL or local folder</span>
         </div>
         <div>
           <b>3</b>
-          <span>{canUseAdminConnect ? 'Use Connect or Clone below; restart only if you edit env' : 'Restart backend, then refresh this console'}</span>
+          <span>{canUseAdminConnect ? 'Use Connect below; restart only if you edit env' : 'Restart backend, then refresh this console'}</span>
         </div>
       </div>
       <div className="readiness-command mono repo-command">
-        {commands.clone}
-        <br />
         {commands.env}
+        <br />
+        {commands.clone}
       </div>
+      <GitHubAuthPanel githubOAuth={githubOAuth} onConnectGithubOAuth={onConnectGithubOAuth} />
       {canConnectWorkspace && onConnectWorkspace && (
         <RepoConnectForm onConnectWorkspace={onConnectWorkspace} />
       )}
       {canConnectWorkspace && onCloneWorkspace && (
         <details className="repo-clone">
           <summary>
-            <span>Clone from GitHub</span>
+            <span>Connect GitHub</span>
             <small>admin</small>
           </summary>
           <RepoCloneForm onCloneWorkspace={onCloneWorkspace} />
         </details>
       )}
-      <small>GitHub URL is only for clone/remote. VoiceOps edits the local folder so approvals can create branches and diffs.</small>
+      <small>GitHub URLs stay remote. Local folders still work when you want filesystem fallback.</small>
     </div>
   )
 }
@@ -4777,8 +4855,8 @@ export function repoSetupCommands(workspace) {
   const repoName = repoNameFromRemote(cloneUrl) || 'repo'
   const localPath = `/absolute/path/to/${repoName}`
   return {
-    clone: `git clone ${cloneUrl} ${localPath}`,
-    env: `VOICEOPS_WORKSPACE=${localPath}`,
+    clone: `# local fallback: git clone ${cloneUrl} ${localPath}`,
+    env: `VOICEOPS_WORKSPACE=${cloneUrl}`,
   }
 }
 
@@ -4794,8 +4872,8 @@ export function repositoryFlowCopy(workspace) {
     return {
       tone: 'blocked',
       title: 'Repo not connected',
-      meta: workspace.setup_issue ? 'use local clone path' : 'local setup required',
-      detail: workspace.setup_issue || 'Set VOICEOPS_WORKSPACE to a cloned local folder, not a GitHub URL, before code actions can propose patches.',
+      meta: workspace.setup_issue ? 'repo setup required' : 'repo setup required',
+      detail: workspace.setup_issue || 'Set VOICEOPS_WORKSPACE to a GitHub repository URL or a cloned local folder before code actions can propose patches.',
     }
   }
   if (workspace.is_git_repo === false) {
@@ -4809,14 +4887,14 @@ export function repositoryFlowCopy(workspace) {
   const branch = workspace.branch || 'branch pending'
   const remote = String(workspace.remote_url || '').trim()
   const isGitHub = workspace.remote_kind === 'github' || /github\.com[:/]/i.test(remote)
-  const remoteLabel = remote ? (isGitHub ? 'GitHub remote' : 'git remote') : 'no remote'
+  const remoteLabel = remote ? (isGitHub ? 'GitHub repo' : 'git remote') : 'no remote'
   return {
     tone: remote ? 'ready' : 'local',
-    title: remote ? (isGitHub ? 'GitHub remote detected' : 'Git remote detected') : 'Local git repo connected',
+    title: remote ? (isGitHub ? 'GitHub repo connected' : 'Git remote detected') : 'Local git repo connected',
     meta: `${branch} · ${remoteLabel}`,
     detail: remote
       ? (isGitHub
-        ? 'VOICEOPS_WORKSPACE points to the local clone. Approved patches create local branches; PR creation stays explicit.'
+        ? 'VOICEOPS_WORKSPACE points to GitHub. Approved patches can open branches and PRs after approval.'
         : 'Approved patches create local branches. GitHub PR flow requires origin to point at GitHub.')
       : 'Approved patches can create local branches. Add a GitHub remote later when PRs are needed.',
   }
@@ -4834,12 +4912,12 @@ export function repositoryNextSteps(workspace) {
   const isGitHub = workspace.remote_kind === 'github' || /github\.com[:/]/i.test(remote)
   return [
     { key: 'branch', label: 'Approved patch creates branch', tone: 'ready' },
-    { key: 'commit', label: 'Commit approved patch', tone: 'next' },
+    { key: 'commit', label: isGitHub ? 'PR opens on approval' : 'Commit approved patch', tone: 'next' },
     isGitHub
-      ? { key: 'auth', label: 'Run gh auth login', tone: 'next' }
+      ? { key: 'auth', label: 'Use GitHub checks', tone: 'next' }
       : { key: 'remote', label: 'Add GitHub origin remote', tone: 'blocked' },
     isGitHub
-      ? { key: 'pr', label: 'Create PR explicitly', tone: 'manual' }
+      ? { key: 'pr', label: 'Review PR explicitly', tone: 'manual' }
       : { key: 'pr', label: 'PR after GitHub remote', tone: 'manual' },
   ]
 }
@@ -4861,14 +4939,14 @@ export function repositoryBindingSummary(workspace) {
 export function repositoryAuthBoundary(workspace) {
   if (!workspace?.connected) return {
     mode: 'local clone',
-    detail: 'GitHub URL is used only to clone. VoiceOps needs a local folder path.',
+    detail: 'GitHub URL or local folder path can bind code actions.',
   }
   const remote = String(workspace.remote_url || '').trim()
   const isGitHub = workspace.remote_kind === 'github' || /github\.com[:/]/i.test(remote)
   return isGitHub
     ? {
-      mode: 'local gh',
-      detail: 'PRs use your local GitHub CLI session; VoiceOps does not collect GitHub OAuth tokens.',
+      mode: 'GitHub API',
+      detail: 'VoiceOps uses GitHub sign-in, GITHUB_TOKEN, or GH_TOKEN for private repos and PR creation.',
     }
     : {
       mode: 'local git',
@@ -4876,7 +4954,14 @@ export function repositoryAuthBoundary(workspace) {
     }
 }
 
-function RepositoryFlowPanel({ workspace, canConnectWorkspace = false, onConnectWorkspace, onCloneWorkspace }) {
+function RepositoryFlowPanel({
+  workspace,
+  canConnectWorkspace = false,
+  onConnectWorkspace,
+  onCloneWorkspace,
+  githubOAuth,
+  onConnectGithubOAuth,
+}) {
   const copy = repositoryFlowCopy(workspace)
   if (!copy) return null
   const compact = workspace?.connected
@@ -4906,6 +4991,9 @@ function RepositoryFlowPanel({ workspace, canConnectWorkspace = false, onConnect
         </div>
       )}
       <small className="repo-auth-boundary"><b>{authBoundary.mode}</b> {authBoundary.detail}</small>
+      {workspace?.connected && (workspace.remote_kind === 'github' || /github\.com[:/]/i.test(String(workspace.remote_url || ''))) && (
+        <GitHubAuthPanel githubOAuth={githubOAuth} onConnectGithubOAuth={onConnectGithubOAuth} />
+      )}
       {workspace?.persistence_note && <small className="repo-persistence-note">{workspace.persistence_note}</small>}
       {!workspace?.connected && (
         <RepositorySetupPanel
@@ -4913,6 +5001,8 @@ function RepositoryFlowPanel({ workspace, canConnectWorkspace = false, onConnect
           canConnectWorkspace={canConnectWorkspace}
           onConnectWorkspace={onConnectWorkspace}
           onCloneWorkspace={onCloneWorkspace}
+          githubOAuth={githubOAuth}
+          onConnectGithubOAuth={onConnectGithubOAuth}
         />
       )}
       {canChangeWorkspace && (
@@ -4929,7 +5019,7 @@ function RepositoryFlowPanel({ workspace, canConnectWorkspace = false, onConnect
           {onCloneWorkspace && (
             <details className="repo-clone">
               <summary>
-                <span>Clone GitHub repo</span>
+                <span>Connect GitHub</span>
                 <small>optional</small>
               </summary>
               <RepoCloneForm onCloneWorkspace={onCloneWorkspace} />
@@ -6066,6 +6156,8 @@ export default function RightRail({
   onDisconnectLLMProvider,
   onConnectWorkspace,
   onCloneWorkspace,
+  githubOAuth,
+  onConnectGithubOAuth,
   onCreateAgentAssignment,
   onDispatchAgentAssignment,
   onCancelAgentAssignment,
@@ -6150,6 +6242,8 @@ export default function RightRail({
           agentName={agentName}
         />
 
+        <TeamInvitePanel roomId={roomId} />
+
         <div className="rail-section rail-section--workdash">
           <WorkDashboardPanel
             dashboard={workDashboard}
@@ -6166,8 +6260,8 @@ export default function RightRail({
         </div>
 
         {!roomSnapshotLoading && (
-          <div id="agent-actions" className={`rail-section rail-section--actions ${!recentActions.length ? 'rail-section--empty-actions' : ''}`}>
-            <p className="section-lab">Agent actions</p>
+          <div id="agent-actions" className={`rail-section rail-section--actions ${!recentActions.length ? 'rail-section--empty-actions rail-section--no-pending-actions' : ''}`}>
+            <p className="section-lab">Approval</p>
             {actionRows.pending.length ? (
               <div className="approval-queue" aria-label={`Approval queue: ${actionRows.pending.length} pending`}>
                 <div className="approval-queue-head">
@@ -6258,6 +6352,8 @@ export default function RightRail({
               canConnectWorkspace={canConnectWorkspace}
               onConnectWorkspace={onConnectWorkspace}
               onCloneWorkspace={onCloneWorkspace}
+              githubOAuth={githubOAuth}
+              onConnectGithubOAuth={onConnectGithubOAuth}
             />
             <AgentRoutingFlowPanel providers={externalAgentProviders} agentName={agentName} />
 
@@ -6293,6 +6389,7 @@ export default function RightRail({
             <AgentSetupSubdetails
               title="Coding agents"
               meta={externalAgentSetupMeta(externalAgentProviders)}
+              open
             >
               <ExternalAgentsPanel
                 providers={providerRows}

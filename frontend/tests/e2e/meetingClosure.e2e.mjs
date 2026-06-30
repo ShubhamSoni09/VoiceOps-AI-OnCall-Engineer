@@ -84,6 +84,7 @@ async function main() {
     await expect(smokeStatus).toContainText('E2E gate completed', { timeout: 90_000 })
     await expect(page.getByText(/Sam Ortiz approved the patch on voiceops\/act-/i).first()).toBeVisible()
 
+    await openActionHistory(observerPage)
     const completedAction = observerPage.getByTestId('agent-action-completed').filter({ hasText: 'patch' }).first()
     await expect(completedAction).toContainText('completed')
     await expect(completedAction).toContainText(/voiceops\/act-/)
@@ -158,6 +159,14 @@ async function openSystemDetails(page) {
     await systemDetails.locator('summary').first().click()
   }
   return systemDetails
+}
+
+async function openActionHistory(page) {
+  const details = page.locator('details.action-history-details')
+  await expect(details).toBeVisible({ timeout: 30_000 })
+  if (!(await details.evaluate((node) => node.open))) {
+    await details.locator(':scope > summary').click()
+  }
 }
 
 function assertReport(report) {

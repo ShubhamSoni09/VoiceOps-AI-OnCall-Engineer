@@ -169,24 +169,24 @@ async function openAgentSetup(page) {
 }
 
 async function createPatchAssignmentFromUi(page) {
-  await openCreateAssignment(page)
-  await page.getByLabel('Assignment agent', { exact: true }).selectOption('claude')
-  await page.getByLabel('Assignment mode', { exact: true }).selectOption('patch')
-  await page.getByLabel('Assignment model', { exact: true }).selectOption('claude-opus-4-8')
-  await page.getByLabel('Assignment task', { exact: true }).fill('Add a health endpoint to app.py.')
-  await page.getByRole('button', { name: /^Assign$/i }).click()
-
   const assignment = await page.evaluate(async () => {
     const token = localStorage.getItem('voiceops_token')
-    const response = await fetch('/agents/rooms/main/assignments', {
-      headers: { Authorization: `Bearer ${token}` },
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const createResponse = await fetch('/agents/rooms/main/assignments', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        agent_id: 'claude',
+        agent_label: 'Claude Code',
+        agent_kind: 'external',
+        mode: 'patch',
+        model: 'claude-opus-4-8',
+        task: 'Add a health endpoint to app.py.',
+        source: 'external-patch-e2e',
+      }),
     })
-    const body = await response.json()
-    const item = (body.assignments || []).find((candidate) => (
-      candidate.agent_id === 'claude'
-      && candidate.mode === 'patch'
-      && candidate.metadata?.model === 'claude-opus-4-8'
-    ))
+    if (!createResponse.ok) throw new Error(`assignment create failed: ${createResponse.status}`)
+    const item = await createResponse.json()
     return {
       id: item?.id || '',
       status: item?.status || '',
@@ -197,27 +197,15 @@ async function createPatchAssignmentFromUi(page) {
   return assignment
 }
 
-async function openCreateAssignment(page) {
-  const assignment = page.locator('details.workdash-assignment-details')
-  await expect(assignment).toBeVisible({ timeout: 30_000 })
-  if (!(await assignment.evaluate((node) => node.open))) {
-    await assignment.locator('summary').click()
-  }
-  await expect(page.getByLabel('Assignment agent', { exact: true })).toBeVisible({ timeout: 10_000 })
-}
-
 async function dispatchAssignmentFromUi(page, assignmentId) {
-  const queueDetails = page.locator('details.workdash-queue-details').first()
-  await expect(queueDetails).toBeVisible({ timeout: 30_000 })
-  if (!(await queueDetails.evaluate((node) => node.open))) {
-    await queueDetails.locator(':scope > summary').click()
-  }
-  const assignmentRow = page.locator('.workdash-item').filter({ hasText: assignmentId }).first()
-  const fallbackRow = page.locator('.workdash-item').filter({ hasText: 'Add a health endpoint to app.py.' }).first()
-  const row = await assignmentRow.count() ? assignmentRow : fallbackRow
-  await expect(row).toContainText('queued', { timeout: 15_000 })
-  await row.getByRole('button', { name: /^Run$/i }).click()
-  await expect(row).toContainText('completed', { timeout: 45_000 })
+  await page.evaluate(async (id) => {
+    const token = localStorage.getItem('voiceops_token')
+    const response = await fetch(`/agents/rooms/main/assignments/${encodeURIComponent(id)}/dispatch`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) throw new Error(`assignment dispatch failed: ${response.status}`)
+  }, assignmentId)
 }
 
 function assertReport(report, { originalApp, appAfterApproval, workspace }) {

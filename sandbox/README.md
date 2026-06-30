@@ -1,10 +1,10 @@
 # VoiceOps sandbox workspace
 
-Small **checkout-api** demo with intentional bugs for agent testing:
+Small **checkout-api** demo for agent testing:
 
 - `GET /v2/charge` — simulates 500s when a fake DB pool is exhausted
 - `GET /metrics` — returns error-rate style metrics
-- `GET /health` — **missing on purpose** (agent should add it; pytest fails until fixed)
+- `GET /health` — health-check endpoint used by pytest
 
 ## Setup
 
@@ -13,7 +13,7 @@ cd sandbox
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-pytest   # should fail until /health exists
+pytest
 ```
 
 ## Connect MCP + dashboard
@@ -35,6 +35,6 @@ Example prompts for the Cursor agent (it will use MCP tools: `read_file`, `write
 
 1. *"Use workspace_info and list what's in the sandbox."*
 2. *"Run pytest in sandbox and tell me what's failing."*
-3. *"Add a GET /health endpoint to sandbox/app.py so tests pass, then run pytest again."*
+3. *"Inspect the health-check endpoint in sandbox/app.py, then run pytest."*
 
 Allowed shell commands in the workspace: `python`, `pytest`, `pip`, and read-only `git` (`status`, `diff`, `log`, `branch`, `show`).

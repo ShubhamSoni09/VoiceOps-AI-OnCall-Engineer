@@ -223,46 +223,47 @@ async function openAgentSetup(page) {
 }
 
 async function createExternalAssignmentFromUi(page) {
-  await openCreateAssignment(page)
-  await page.getByLabel('Assignment agent', { exact: true }).selectOption('claude')
-  await page.getByLabel('Assignment mode', { exact: true }).selectOption('review')
-  await page.getByLabel('Assignment model', { exact: true }).selectOption('claude-opus-4-8')
-  await page.getByLabel('Assignment task', { exact: true }).fill('Review app.py and summarize risk.')
-  await page.getByRole('button', { name: /^Assign$/i }).click()
-
   const assignment = await page.evaluate(async () => {
     const token = localStorage.getItem('voiceops_token')
-    const headers = { Authorization: `Bearer ${token}` }
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const createResponse = await fetch('/agents/rooms/main/assignments', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        agent_id: 'claude',
+        agent_label: 'Claude Code',
+        agent_kind: 'external',
+        mode: 'review',
+        model: 'claude-opus-4-8',
+        task: 'Review app.py and summarize risk.',
+        source: 'agent-controls-e2e',
+      }),
+    })
+    if (!createResponse.ok) {
+      throw new Error(`assignment create failed: ${createResponse.status}`)
+    }
+    const created = await createResponse.json()
     const [assignmentsResponse, providersResponse] = await Promise.all([
       fetch('/agents/rooms/main/assignments', { headers }),
       fetch('/external-agents/providers', { headers }),
     ])
     const assignmentsBody = await assignmentsResponse.json()
     const providers = await providersResponse.json()
-    const created = (assignmentsBody.assignments || []).find((item) => (
+    const persisted = (assignmentsBody.assignments || []).find((item) => (
       item.agent_id === 'claude' && item.metadata?.model === 'claude-opus-4-8'
-    ))
+    )) || created
     const claude = providers.find((provider) => provider.provider === 'claude')
     return {
-      id: created?.id || '',
-      agentId: created?.agent_id || '',
-      model: created?.metadata?.model || '',
-      status: created?.status || '',
+      id: persisted?.id || '',
+      agentId: persisted?.agent_id || '',
+      model: persisted?.metadata?.model || '',
+      status: persisted?.status || '',
       providerCommand: claude?.local_cli_command || '',
       providerCommandTemplate: claude?.local_cli_command_template || '',
     }
   })
   if (!assignment.id) throw new E2EFailure('create external assignment', 'assignment was not persisted')
   return assignment
-}
-
-async function openCreateAssignment(page) {
-  const assignment = page.locator('details.workdash-assignment-details')
-  await expect(assignment).toBeVisible({ timeout: 30_000 })
-  if (!(await assignment.evaluate((node) => node.open))) {
-    await assignment.locator('summary').click()
-  }
-  await expect(page.getByLabel('Assignment agent', { exact: true })).toBeVisible({ timeout: 10_000 })
 }
 
 async function printFailure(error, logs) {

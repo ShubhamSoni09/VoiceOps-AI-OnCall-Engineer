@@ -824,6 +824,8 @@ def test_external_agent_oauth_state_and_callback_connects(tmp_path):
             started = start.json()
             assert started["mode"] == "mock_exchange"
             assert "state=" in started["authorization_url"]
+            assert "provider=codex" in started["redirect_uri"]
+            assert "provider%3Dcodex" in started["authorization_url"]
 
             bad = client.post(
                 "/external-agents/oauth/callback",
@@ -840,6 +842,43 @@ def test_external_agent_oauth_state_and_callback_connects(tmp_path):
             assert done.status_code == 200
             assert done.json()["auth_method"] == "oauth"
             assert done.json()["metadata"]["exchange_mode"] == "mock_exchange"
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(old_overrides)
+
+
+def test_external_agent_oauth_browser_callback_connects(tmp_path):
+    workspace = tmp_path / "workspace"
+    _write_workspace(workspace)
+    settings = Settings(
+        users_store_path=tmp_path / "users.json",
+        jwt_secret="external-agent-oauth-browser-secret",
+        external_agent_store_path=tmp_path / "external-agents.json",
+        external_agent_credential_secret="credential-secret-for-tests",
+        collab_store_path=tmp_path / "collab-unused.json",
+        voiceops_workspace=str(workspace),
+    )
+    users = UserStore(settings.users_store_path)
+    collab = CollaborationService(CollaborationStore(tmp_path / "collab.json"))
+    old_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_user_store] = lambda: users
+    app.dependency_overrides[get_collaboration_service] = lambda: collab
+    app.dependency_overrides[get_room_event_hub] = lambda: RoomEventHub()
+    try:
+        with TestClient(app) as client:
+            start = client.post(
+                "/external-agents/providers/codex/oauth/start",
+                headers=_auth(_token(client)),
+                json={"scopes": ["codex:run"]},
+            ).json()
+            done = client.get(f"/external-agents/oauth/callback?provider=codex&code=abc&state={start['state']}")
+
+            assert done.status_code == 200
+            assert "codex connected" in done.text
+            stored = ExternalAgentCredentialStore(settings.external_agent_store_path).get("user-priya", "codex")
+            assert stored is not None
+            assert stored.auth_method == ExternalAgentAuthMethod.OAUTH
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(old_overrides)

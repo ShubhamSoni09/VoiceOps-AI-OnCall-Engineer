@@ -14,26 +14,26 @@ def test_workspace_readiness_reports_missing_workspace(tmp_path):
     assert result.checks[0].severity == "error"
 
 
-def test_workspace_readiness_rejects_github_url_as_workspace():
+def test_workspace_readiness_accepts_github_url_as_workspace():
     settings = Settings(voiceops_workspace="https://github.com/team/app.git")
 
     result = WorkspaceReadinessService(settings).inspect()
 
-    assert result.ready is False
+    assert result.ready is True
     assert result.workspace == "https://github.com/team/app.git"
     assert result.checks[0].id == "workspace_configured"
-    assert result.checks[0].severity == "error"
-    assert "local clone path" in result.checks[0].detail
-    assert "not a GitHub or git remote URL" in result.checks[0].detail
+    assert result.checks[0].severity == "ok"
+    assert result.branch == "main"
+    assert {check.id: check.ready for check in result.checks}["branch_workflow"] is True
 
 
-def test_workspace_readiness_rejects_ssh_git_remote_as_workspace():
+def test_workspace_readiness_accepts_ssh_github_remote_as_workspace():
     settings = Settings(voiceops_workspace="git@github.com:team/app.git")
 
     result = WorkspaceReadinessService(settings).inspect()
 
-    assert result.ready is False
-    assert "local clone path" in result.checks[0].detail
+    assert result.ready is True
+    assert result.root_name == "app"
 
 
 def test_workspace_readiness_reports_git_and_test_command(tmp_path):

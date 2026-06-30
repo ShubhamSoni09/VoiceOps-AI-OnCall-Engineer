@@ -10,7 +10,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.config import Settings
+from app.config import Settings, settings_from_env_file
 from app.system.security import ProductionSecurityReport, build_production_security_report
 
 
@@ -36,7 +36,7 @@ def run_security_readiness(
     if settings is not None:
         return build_production_security_report(settings)
     if env_file:
-        return build_production_security_report(Settings(_env_file=env_file))
+        return build_production_security_report(settings_from_env_file(env_file))
     return build_production_security_report(Settings())
 
 

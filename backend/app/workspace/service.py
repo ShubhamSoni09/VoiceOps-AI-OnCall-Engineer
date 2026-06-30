@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.cache import JsonTTLCache
 from app.config import Settings
+from app.workspace.github import github_query, github_read_file, github_search, github_tree, is_github_workspace
 from app.workspace.models import (
     CodeQueryResponse,
     WorkspaceFile,
@@ -121,6 +122,8 @@ class WorkspaceCodeService:
         self._cache = JsonTTLCache(settings.voiceops_cache_path)
 
     def tree(self, *, limit: int = 120, use_cache: bool = True) -> WorkspaceTreeResponse:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            return github_tree(self._settings, limit=limit)
         root = get_workspace_root(self._settings.voiceops_workspace)
         cache_key = _cache_key(root, f"tree:{limit}")
         source_token = _workspace_source_token(root)
@@ -161,6 +164,8 @@ class WorkspaceCodeService:
         return response
 
     def read(self, path: str, *, max_chars: int = 12000) -> WorkspaceFileResponse:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            return github_read_file(self._settings, path, max_chars=max_chars)
         target = resolve_workspace_path(path, configured=self._settings.voiceops_workspace)
         if _should_skip(target, get_workspace_root(self._settings.voiceops_workspace)):
             raise WorkspaceError(f"File is not readable through workspace context: {path}")
@@ -175,6 +180,8 @@ class WorkspaceCodeService:
         )
 
     def search(self, query: str, *, limit: int = 20, use_cache: bool = True) -> WorkspaceSearchResponse:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            return github_search(self._settings, query, limit=limit)
         terms = _query_terms(query)
         if not terms:
             return WorkspaceSearchResponse(query=query, matches=[])
@@ -201,6 +208,8 @@ class WorkspaceCodeService:
         return response
 
     def query(self, question: str, *, limit: int = 8) -> CodeQueryResponse:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            return github_query(self._settings, question, limit=limit)
         matches = self.search(question, limit=limit).matches
         if not matches:
             return CodeQueryResponse(
@@ -221,6 +230,8 @@ class WorkspaceCodeService:
         return CodeQueryResponse(answer=answer, references=matches)
 
     def invalidate_cache(self) -> None:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            return
         root = get_workspace_root(self._settings.voiceops_workspace)
         self._cache.delete_prefix(_cache_prefix(root))
 

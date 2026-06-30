@@ -13,7 +13,12 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+from app.auth.models import ROLE_LABELS, ROLE_PERMISSIONS, Role, UserPublic
+from app.collab.models import TextMessageRequest
+from app.collab.service import CollaborationService
+from app.collab.store import create_collaboration_store
 from app.config import Settings
+from app.voice_agent.models import OrchestratorResult
 from scripts.init_collab_event_store import init_event_store
 from scripts.target_readiness import run_target_readiness
 
@@ -28,6 +33,7 @@ class LocalRuntimeBootstrapReport:
     target_readiness_score: int
     next_command: str
     force: bool = False
+    demo_seeded: bool = False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--force", action="store_true", help="Overwrite an existing env file.")
     parser.add_argument("--replace-event-store", action="store_true", help="Replace an existing local SQLite event store.")
+    parser.add_argument("--seed-demo-room", action="store_true", help="Seed the main room with a tiny demo timeline and pending patch.")
     parser.add_argument(
         "--allow-non-git-workspace",
         action="store_true",
@@ -71,6 +78,7 @@ def bootstrap_local_runtime(
     force: bool = False,
     replace_event_store: bool = False,
     allow_non_git_workspace: bool = False,
+    seed_demo_room: bool = False,
 ) -> LocalRuntimeBootstrapReport:
     workspace = workspace.expanduser().resolve()
     env_file = env_file.expanduser().resolve()
@@ -84,6 +92,7 @@ def bootstrap_local_runtime(
     event_store = _ensure_event_store(collab_sqlite, replace=replace_event_store)
     env_file.write_text(_env_text(workspace=workspace, collab_sqlite=collab_sqlite), encoding="utf-8")
     os.chmod(env_file, 0o644)
+    demo_seeded = _seed_demo_room(env_file=env_file, workspace=workspace) if seed_demo_room else False
     readiness = run_target_readiness(env_file=env_file)
     return LocalRuntimeBootstrapReport(
         env_path=str(env_file),
@@ -94,6 +103,7 @@ def bootstrap_local_runtime(
         target_readiness_score=readiness.score,
         next_command=f"python scripts/target_readiness.py --env-file {env_file} --json",
         force=force,
+        demo_seeded=demo_seeded,
     )
 
 
@@ -144,6 +154,69 @@ def _ensure_event_store(collab_sqlite: Path, *, replace: bool) -> dict:
     return init_event_store(collab_sqlite, replace=replace)
 
 
+def _seed_demo_room(*, env_file: Path, workspace: Path) -> bool:
+    settings = Settings(_env_file=env_file)
+    service = CollaborationService(
+        create_collaboration_store(settings),
+        agent_display_name=settings.agent_display_name,
+        agent_initials=settings.agent_initials,
+        agent_wake_words=settings.agent_wake_words,
+    )
+    room_id = "main"
+    if service.list_messages(room_id, limit=1):
+        return False
+
+    priya = _demo_user("user-priya", "priya@voiceops.dev", "Priya Nair", "PN", Role.ON_CALL)
+    sam = _demo_user("user-admin", "admin@voiceops.dev", "Sam Ortiz", "SO", Role.ADMIN)
+    service.update_room_workspace(room_id, str(workspace))
+    service.add_user_message(
+        room_id,
+        priya,
+        TextMessageRequest(text="We decided to keep the fix local and review app.py before handoff.", source="demo_seed"),
+    )
+    service.add_user_message(
+        room_id,
+        sam,
+        TextMessageRequest(text="Action item: confirm the /health endpoint and tests before sharing the demo.", source="demo_seed"),
+    )
+    service.add_agent_message(
+        room_id,
+        "I found the sandbox repo and prepared an approval-first health-check patch.",
+        metadata={"source": "demo_seed"},
+    )
+    app_py = workspace / "app.py"
+    service.add_action(
+        room_id,
+        priya,
+        OrchestratorResult(
+            executed=False,
+            pending_approval=True,
+            action="patch",
+            summary="Approve sandbox health-check patch for app.py.",
+            files_changed=["app.py"],
+            approval={"diff": "demo proposal: keep /health returning {'status': 'ok'}"},
+            approval_payload={
+                "kind": "patch",
+                "files": {"app.py": app_py.read_text(encoding="utf-8") if app_py.exists() else ""},
+                "test_command": "python -m pytest -q",
+            },
+        ),
+    )
+    return True
+
+
+def _demo_user(user_id: str, email: str, name: str, initials: str, role: Role) -> UserPublic:
+    return UserPublic(
+        id=user_id,
+        email=email,
+        name=name,
+        initials=initials,
+        role=role,
+        role_label=ROLE_LABELS[role],
+        permissions=sorted(ROLE_PERMISSIONS[role]),
+    )
+
+
 def _validate_workspace(workspace: Path, *, allow_non_git: bool) -> None:
     if not workspace.is_absolute():
         raise ValueError("workspace must be an absolute path")
@@ -168,6 +241,7 @@ def print_text_report(report: LocalRuntimeBootstrapReport) -> None:
     print(f"- env: {report.env_path}")
     print(f"- workspace: {report.workspace_path}")
     print(f"- event store: {report.collab_sqlite_path}")
+    print(f"- demo timeline: {'seeded' if report.demo_seeded else 'unchanged'}")
     print(f"- target readiness: {report.target_readiness_status} ({report.target_readiness_score}%)")
     print(f"- next: {report.next_command}")
 
@@ -182,6 +256,7 @@ def main(argv: list[str] | None = None) -> int:
             force=args.force,
             replace_event_store=args.replace_event_store,
             allow_non_git_workspace=args.allow_non_git_workspace,
+            seed_demo_room=args.seed_demo_room,
         )
     except (OSError, ValueError) as exc:
         if args.json:

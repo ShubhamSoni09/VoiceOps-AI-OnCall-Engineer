@@ -42,6 +42,7 @@ import RightRail, {
   repositoryBindingSummary,
   repoSetupCommands,
   repositoryFlowCopy,
+  roomInviteUrl,
   repositoryNextSteps,
   runtimeDiagnosticsMeta,
   setupActionStripItems,
@@ -265,7 +266,7 @@ describe('RightRail work dashboard', () => {
     })
 
     expect(items).toEqual([
-      expect.objectContaining({ key: 'repo', tone: 'ready', value: 'GitHub remote detected' }),
+      expect.objectContaining({ key: 'repo', tone: 'ready', value: 'GitHub repo connected' }),
       expect.objectContaining({ key: 'agents', tone: 'attention', value: 'Patch agent needed' }),
       expect.objectContaining({ key: 'actions', tone: 'attention', value: '1 approval' }),
     ])
@@ -688,16 +689,15 @@ describe('RightRail work dashboard', () => {
     expect(html).toContain('<details class="setup-action-details" aria-label="Setup status details">')
     expect(html).not.toContain('<details class="setup-action-details" aria-label="Setup status details" open="">')
     expect(html).toContain('<span>Status details</span>')
-    expect(html.indexOf('Work dashboard')).toBeLessThan(html.indexOf('Agent actions'))
-    expect(html.indexOf('Agent actions')).toBeLessThan(html.indexOf('Meeting memory'))
-    expect(html.indexOf('Meeting memory')).toBeLessThan(html.indexOf('Handoff'))
-    expect(html.indexOf('Handoff')).toBeLessThan(html.indexOf('<span>Agent setup</span>'))
+    expect(html.indexOf('Team room')).toBeLessThan(html.indexOf('Work dashboard'))
+    expect(html.indexOf('Work dashboard')).toBeLessThan(html.indexOf('Approval'))
+    expect(html.indexOf('Approval')).toBeLessThan(html.indexOf('<span>Agent setup</span>'))
     expect(html.indexOf('<span>Agent setup</span>')).toBeLessThan(html.indexOf('<span>System details</span>'))
-    expect(html.indexOf('Agent actions')).toBeLessThan(html.indexOf('Repo not connected'))
+    expect(html.indexOf('Approval')).toBeLessThan(html.indexOf('Repo not connected'))
     expect(html).toContain('id="agent-actions"')
     expect(html).toContain('id="agent-setup"')
     expect(html.indexOf('Agent assignment off')).toBeLessThan(html.indexOf('Work dashboard'))
-    expect(html.indexOf('Repository setup')).toBeGreaterThan(html.indexOf('Handoff'))
+    expect(html.indexOf('Repository setup')).toBeGreaterThan(html.indexOf('<span>Agent setup</span>'))
     expect(html.indexOf('Repository setup')).toBeLessThan(html.indexOf('<span>System details</span>'))
     expect(html).toContain('<details class="rail-section-details">')
     expect(html).toContain('<span>Agent setup</span>')
@@ -706,14 +706,12 @@ describe('RightRail work dashboard', () => {
     expect(html).toContain('<span>System details</span>')
     expect(html).toContain('repo not connected')
     expect(html).not.toContain('<span>Operator diagnostics</span>')
-    expect(html).toContain('Workspace context')
-    expect(html).toContain('Set VOICEOPS_WORKSPACE to a cloned local folder, not a GitHub URL, before code actions can propose patches.')
+    expect(html).toContain('Team invite')
+    expect(html).toContain('Set VOICEOPS_WORKSPACE to a GitHub repository URL or a cloned local folder before code actions can propose patches.')
     expect(html).toContain('connect coding agent')
     expect(html).toContain('Connect a coding agent before assigning review, test, or patch work.')
     expect(html).not.toContain('readiness · idle')
     expect(html).toContain('System summary')
-    expect(html).toContain('Runtime diagnostics')
-    expect(html).toContain('aria-label="Runtime diagnostics: repo setup"')
     expect(html).toContain('<details class="diagnostic-details">')
     expect(html).not.toContain('<details class="diagnostic-details" open="">')
   })
@@ -787,7 +785,8 @@ describe('RightRail work dashboard', () => {
     expect(html).toContain('aria-label="LLM routing: 2 roles · credentials"')
     expect(html).toContain('aria-label="Coding agents: 1 connected · 1 to set up"')
     expect(html).toContain('<details class="diagnostic-details agent-setup-subdetails">')
-    expect(html).not.toContain('<details class="diagnostic-details agent-setup-subdetails" open="">')
+    expect(html).toContain('<details class="diagnostic-details agent-setup-subdetails" open=""><summary aria-label="Coding agents: 1 connected · 1 to set up"')
+    expect(html).not.toContain('<details class="diagnostic-details agent-setup-subdetails" open=""><summary aria-label="LLM routing')
     expect(html.indexOf('Agent team')).toBeLessThan(html.indexOf('LLM routing'))
     expect(html.indexOf('aria-label="LLM routing: 2 roles · credentials"')).toBeLessThan(
       html.indexOf('aria-label="Coding agents: 1 connected · 1 to set up"'),
@@ -1357,6 +1356,8 @@ describe('RightRail work dashboard', () => {
     expect(html.indexOf('Approval effect')).toBeLessThan(html.indexOf('Diff preview'))
     expect(html.indexOf('Approve</button>')).toBeLessThan(html.indexOf('Diff preview'))
     expect(html.indexOf('Reject</button>')).toBeLessThan(html.indexOf('Diff preview'))
+    expect(html).toContain('Diff preview')
+    expect(html).toContain('<pre class="diff-preview" id="diff-act-pending-brief" hidden="">')
   })
 
   it('only enables real PR creation when gh preflight is ready', () => {
@@ -1650,6 +1651,18 @@ describe('RightRail work dashboard', () => {
     expect(source).not.toContain('queryRoomProvenance(\'main\'')
     expect(source).not.toContain('queryRoomMemory(\'main\'')
     expect(source).not.toContain('rebuildRoomRagIndex(\'main\'')
+  })
+
+  it('renders a clean room invite link for teammates', () => {
+    expect(roomInviteUrl('alpha-team', {
+      origin: 'https://voiceops.test',
+      pathname: '/console',
+      search: '?token=secret&theme=dark',
+    })).toBe('https://voiceops.test/console?theme=dark&room=alpha-team')
+
+    const html = renderRightRail({ roomId: 'alpha-team' })
+    expect(html).toContain('Team invite')
+    expect(html).toContain('Copy invite')
   })
 
   it('keeps recent meeting memory folded by default', () => {
@@ -1998,13 +2011,13 @@ describe('RightRail work dashboard', () => {
       },
     })
 
-    expect(html).toContain('GitHub remote detected')
+    expect(html).toContain('GitHub repo connected')
     expect(html).toContain('repo-flow ready compact')
-    expect(html).toContain('main · GitHub remote')
+    expect(html).toContain('main · GitHub repo')
     expect(html).toContain('Active repository binding')
     expect(html).toContain('room repo')
     expect(html).toContain('/tmp/voiceops-room')
-    expect(html).toContain('VOICEOPS_WORKSPACE points to the local clone')
+    expect(html).toContain('VOICEOPS_WORKSPACE points to GitHub')
     expect(html).toContain('<small>repo ok · connect coding agent</small>')
     expect(html).toContain('System summary')
     expect(html).toContain('Workspace')
@@ -2081,8 +2094,8 @@ describe('RightRail work dashboard', () => {
       remote_kind: 'github',
       remote_url: 'https://github.com/team/voiceops.git',
     })).toEqual({
-      mode: 'local gh',
-      detail: 'PRs use your local GitHub CLI session; VoiceOps does not collect GitHub OAuth tokens.',
+      mode: 'GitHub API',
+      detail: 'VoiceOps uses GitHub sign-in, GITHUB_TOKEN, or GH_TOKEN for private repos and PR creation.',
     })
     expect(repositoryAuthBoundary({
       connected: true,
@@ -2099,9 +2112,9 @@ describe('RightRail work dashboard', () => {
       remote_url: 'https://github.com/team/voiceops.git',
     }).map((step) => step.label)).toEqual([
       'Approved patch creates branch',
-      'Commit approved patch',
-      'Run gh auth login',
-      'Create PR explicitly',
+      'PR opens on approval',
+      'Use GitHub checks',
+      'Review PR explicitly',
     ])
 
     expect(repositoryNextSteps({
@@ -2125,10 +2138,10 @@ describe('RightRail work dashboard', () => {
       },
     })
     expect(html).toContain('aria-label="Repository workflow steps"')
-    expect(html).toContain('Run gh auth login')
-    expect(html).toContain('Create PR explicitly')
-    expect(html).toContain('local gh')
-    expect(html).toContain('VoiceOps does not collect GitHub OAuth tokens.')
+    expect(html).toContain('PR opens on approval')
+    expect(html).toContain('Use GitHub checks')
+    expect(html).toContain('GitHub API')
+    expect(html).toContain('GitHub sign-in')
   })
 
   it('does not present a plain local folder as branch-ready', () => {
@@ -2315,19 +2328,18 @@ describe('RightRail work dashboard', () => {
 
     expect(html).toContain('Repo not connected')
     expect(html).toContain('Repository setup')
-    expect(html).toContain('Connect code actions by pointing the backend at a local clone')
+    expect(html).toContain('Connect code actions by pointing the backend at a GitHub repository URL or an existing local clone.')
     expect(html).toContain('Repository setup steps')
-    expect(html).toContain('Clone the GitHub repo, or open an existing local clone')
-    expect(html).toContain('Set <code>VOICEOPS_WORKSPACE</code> to that local folder, not the GitHub URL')
+    expect(html).toContain('Connect a GitHub repo URL, or open an existing local clone')
+    expect(html).toContain('Set <code>VOICEOPS_WORKSPACE</code> to the GitHub URL or local folder')
     expect(html).toContain('Restart backend, then refresh this console')
-    expect(html).not.toContain('Use Connect or Clone below')
-    expect(html).toContain('git clone https://github.com/org/repo.git /absolute/path/to/repo')
-    expect(html).toContain('VOICEOPS_WORKSPACE=/absolute/path/to/repo')
-    expect(html).toContain('GitHub URL is only for clone/remote')
-    expect(html).toContain('not a GitHub URL')
+    expect(html).not.toContain('Use Connect below')
+    expect(html).toContain('VOICEOPS_WORKSPACE=https://github.com/org/repo.git')
+    expect(html).toContain('# local fallback: git clone https://github.com/org/repo.git /absolute/path/to/repo')
+    expect(html).toContain('GitHub URLs stay remote')
     expect(html).not.toContain('Local repository path')
     expect(html.indexOf('Repository setup')).toBeGreaterThan(html.indexOf('Repo not connected'))
-    expect(html.indexOf('Agent actions')).toBeLessThan(html.indexOf('Repository setup'))
+    expect(html.indexOf('Approval')).toBeLessThan(html.indexOf('Repository setup'))
     expect(html.indexOf('Repository setup')).toBeGreaterThan(html.indexOf('<span>Agent setup</span>'))
     expect(html.match(/class="repo-setup"/g)).toHaveLength(1)
   })
@@ -2338,17 +2350,31 @@ describe('RightRail work dashboard', () => {
       workspace: { connected: false },
       onConnectWorkspace: async () => {},
       onCloneWorkspace: async () => {},
+      onConnectGithubOAuth: async () => {},
     })
 
     expect(html).toContain('aria-label="Local repository path"')
     expect(html).toContain('/absolute/path/to/local/repo')
     expect(html).toContain('Connect')
-    expect(html).toContain('Clone from GitHub')
-    expect(html).toContain('Use Connect or Clone below; restart only if you edit env')
+    expect(html).toContain('Connect GitHub')
+    expect(html).toContain('Use Connect below; restart only if you edit env')
     expect(html).toContain('aria-label="GitHub repository URL"')
-    expect(html).toContain('aria-label="Optional absolute clone target path"')
-    expect(html).toContain('/absolute/path/under/clone-root')
-    expect(html).toContain('custom paths must be absolute and inside it')
+    expect(html).toContain('VoiceOps will bind it directly without cloning')
+    expect(html).toContain('Sign in with GitHub')
+    expect(html).toContain('GITHUB_TOKEN')
+  })
+
+  it('shows GitHub OAuth status for private repo access', () => {
+    const html = renderRightRail({
+      user: { permissions: ['admin:manage'] },
+      workspace: { connected: true, remote_kind: 'github', remote_url: 'https://github.com/team/app.git' },
+      githubOAuth: { connected: true, login: 'octo', source: 'oauth' },
+      onConnectGithubOAuth: async () => {},
+    })
+
+    expect(html).toContain('GitHub signed in')
+    expect(html).toContain('octo')
+    expect(html).toContain('Reconnect GitHub')
   })
 
   it('shows project access controls only to admins', () => {
@@ -2478,9 +2504,9 @@ describe('RightRail work dashboard', () => {
     expect(html).not.toContain('aria-label="Commit approved patch"')
     expect(html).not.toContain('aria-label="Prepare pull request plan"')
     expect(html).not.toContain('<span>API key</span>')
-    expect(html).not.toContain('>OAuth</button>')
-    expect(html).not.toContain('>CLI setup</button>')
-    expect(html).not.toContain('>Run</button>')
+    expect(html).not.toContain('>Connect</button>')
+    expect(html).not.toContain('>Local CLI</button>')
+    expect(html).not.toContain('>Try</button>')
   })
 
   it('hides workspace code inspection controls from viewer-only users', () => {
@@ -2539,49 +2565,47 @@ describe('RightRail work dashboard', () => {
     expect(html).toContain('Reject</button>')
     expect(html).toContain('aria-label="Assignment task"')
     expect(html).toContain('<span>API key</span>')
-    expect(html).toContain('>OAuth</button>')
-    expect(html).toContain('>CLI setup</button>')
-    expect(html).toContain('>Run</button>')
+    expect(html).toContain('>Connect</button>')
+    expect(html).toContain('>Local CLI</button>')
+    expect(html).toContain('>Try</button>')
   })
 
-  it('surfaces GitHub URL workspace misconfiguration as a local clone fix', () => {
+  it('surfaces GitHub URL workspace setup as direct connect', () => {
     const workspace = {
       connected: false,
       configured_workspace: 'https://github.com/team/app.git',
-      setup_issue: 'VOICEOPS_WORKSPACE must point to a local clone path, not a GitHub or git remote URL.',
     }
     const html = renderRightRail({ workspace })
 
     expect(repositoryFlowCopy(workspace)).toEqual({
       tone: 'blocked',
       title: 'Repo not connected',
-      meta: 'use local clone path',
-      detail: 'VOICEOPS_WORKSPACE must point to a local clone path, not a GitHub or git remote URL.',
+      meta: 'repo setup required',
+      detail: 'Set VOICEOPS_WORKSPACE to a GitHub repository URL or a cloned local folder before code actions can propose patches.',
     })
     expect(commandFallbackCopy(workspace)).toEqual({
       title: 'Typed command fallback',
-      detail: 'VOICEOPS_WORKSPACE must point to a local clone path, not a GitHub or git remote URL.',
+      detail: 'Set VOICEOPS_WORKSPACE in backend/.env to connect local code actions.',
     })
-    expect(html).toContain('use local clone path')
-    expect(html).toContain('VOICEOPS_WORKSPACE must point to a local clone path, not a GitHub or git remote URL.')
+    expect(html).toContain('repo setup required')
+    expect(html).toContain('Set VOICEOPS_WORKSPACE to a GitHub repository URL or a cloned local folder before code actions can propose patches.')
     expect(repoSetupCommands(workspace)).toEqual({
-      clone: 'git clone https://github.com/team/app.git /absolute/path/to/app',
-      env: 'VOICEOPS_WORKSPACE=/absolute/path/to/app',
+      env: 'VOICEOPS_WORKSPACE=https://github.com/team/app.git',
+      clone: '# local fallback: git clone https://github.com/team/app.git /absolute/path/to/app',
     })
-    expect(html).toContain('git clone https://github.com/team/app.git /absolute/path/to/app')
-    expect(html).toContain('VOICEOPS_WORKSPACE=/absolute/path/to/app')
+    expect(html).toContain('VOICEOPS_WORKSPACE=https://github.com/team/app.git')
+    expect(html).toContain('# local fallback: git clone https://github.com/team/app.git /absolute/path/to/app')
   })
 
   it('uses the configured SSH remote when explaining repository setup', () => {
     const workspace = {
       connected: false,
       configured_workspace: 'git@github.com:team/mobile-app.git',
-      setup_issue: 'VOICEOPS_WORKSPACE must point to a local clone path, not a GitHub or git remote URL.',
     }
 
     expect(repoSetupCommands(workspace)).toEqual({
-      clone: 'git clone git@github.com:team/mobile-app.git /absolute/path/to/mobile-app',
-      env: 'VOICEOPS_WORKSPACE=/absolute/path/to/mobile-app',
+      env: 'VOICEOPS_WORKSPACE=git@github.com:team/mobile-app.git',
+      clone: '# local fallback: git clone git@github.com:team/mobile-app.git /absolute/path/to/mobile-app',
     })
   })
 
@@ -2591,9 +2615,9 @@ describe('RightRail work dashboard', () => {
     })
 
     expect(html).not.toContain('Repository setup')
-    expect(html).not.toContain('VOICEOPS_WORKSPACE=/absolute/path/to/repo')
-    expect(html).toContain('GitHub remote detected')
-    expect(html).toContain('VOICEOPS_WORKSPACE points to the local clone')
+    expect(html).not.toContain('VOICEOPS_WORKSPACE=https://github.com/org/repo.git')
+    expect(html).toContain('GitHub repo connected')
+    expect(html).toContain('VOICEOPS_WORKSPACE points to GitHub')
     expect(html).not.toContain('Change local repo')
     expect(html).not.toContain('New local repository path')
   })
@@ -2616,7 +2640,7 @@ describe('RightRail work dashboard', () => {
     expect(html).toContain('aria-label="New local repository path"')
     expect(html).toContain('/absolute/path/to/local/repo')
     expect(html).toContain('Switch')
-    expect(html).toContain('Clone GitHub repo')
+    expect(html).toContain('Connect GitHub')
     expect(html).toContain('UI switches affect the current backend process only unless env changes.')
   })
 
@@ -2980,8 +3004,8 @@ describe('RightRail work dashboard', () => {
     expect(html).toContain('Local Open Agent')
     expect(html).toContain('glm-5.2-local')
     expect(html).toContain('qwen-coder-local')
-    expect(html).toContain('CLI setup')
-    expect(html).not.toContain('OAuth</button>')
+    expect(html).toContain('Local CLI')
+    expect(html).not.toContain('Connect</button><button type="button" aria-expanded="false">Local CLI')
     expect(html).toContain('Connect a local CLI command for this open-source or self-hosted coding agent.')
   })
 

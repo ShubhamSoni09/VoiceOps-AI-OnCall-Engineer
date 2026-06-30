@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from typing import Annotated
 
+from dotenv import dotenv_values
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
@@ -11,7 +12,7 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", ".env.local"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -125,6 +126,13 @@ class Settings(BaseSettings):
     workspace_clone_root: Path = Field(default_factory=lambda: Path.home() / ".voiceops" / "workspaces")
 
     # External side effects
+    github_token: str | None = None
+    github_connection_path: Path = BACKEND_ROOT / "data" / "github_connection.json"
+    github_oauth_client_id: str | None = None
+    github_oauth_client_secret: str | None = None
+    github_oauth_authorize_url: str = "https://github.com/login/oauth/authorize"
+    github_oauth_token_url: str = "https://github.com/login/oauth/access_token"
+    github_oauth_scope: str = "repo"
     github_pr_creation_enabled: bool = False
     github_pr_cli_path: str = "gh"
     github_pr_allowed_base_branches: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["main"])
@@ -184,6 +192,15 @@ def get_settings() -> Settings:
         settings.voiceops_workspace_source = "configured"
     apply_workspace_selection(settings)
     return settings
+
+
+def settings_from_env_file(env_file: str | Path) -> Settings:
+    values = {
+        key.lower(): value
+        for key, value in dotenv_values(env_file).items()
+        if value is not None and key.lower() in Settings.model_fields
+    }
+    return Settings(_env_file=env_file, **values)
 
 
 def apply_workspace_selection(settings: Settings) -> Settings:

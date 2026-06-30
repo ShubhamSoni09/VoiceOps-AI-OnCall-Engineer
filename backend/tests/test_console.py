@@ -35,6 +35,7 @@ def client(tmp_path):
         agent_runs_path=tmp_path / "agent-runs.json",
         rag_index_path=tmp_path / "rag-index.json",
         external_agent_store_path=tmp_path / "external-agents.json",
+        github_connection_path=tmp_path / "github-connection.json",
         llm_connection_store_path=tmp_path / "llm-connections.json",
         voiceops_cache_path=tmp_path / "cache.json",
         workspace_selection_path=tmp_path / "workspace-selection.json",
@@ -117,7 +118,7 @@ def test_bootstrap_disconnected(client):
     assert any(i["id"] == "mcp" and not i["connected"] for i in data["integrations"])
 
 
-def test_bootstrap_reports_github_url_workspace_as_setup_issue(client, tmp_path):
+def test_bootstrap_reports_github_url_workspace_as_connected(client, tmp_path):
     test_settings = Settings(
         users_store_path=tmp_path / "users.json",
         jwt_secret="test-secret-key",
@@ -135,11 +136,12 @@ def test_bootstrap_reports_github_url_workspace_as_setup_issue(client, tmp_path)
 
     assert res.status_code == 200
     data = res.json()
-    assert data["workspace"]["connected"] is False
+    assert data["workspace"]["connected"] is True
     assert data["workspace"]["configured_workspace"] == "https://github.com/team/app.git"
-    assert "local clone path" in data["workspace"]["setup_issue"]
+    assert data["workspace"]["remote_kind"] == "github"
+    assert data["workspace"]["path"] is None
     mcp = next(i for i in data["integrations"] if i["id"] == "mcp")
-    assert "local clone path" in mcp["detail"]
+    assert mcp["detail"] == "GitHub direct"
 
 
 def test_bootstrap_connected_workspace(client, tmp_path):
@@ -220,6 +222,34 @@ def test_bootstrap_distinguishes_local_git_from_github_remote(client, tmp_path):
     assert github["detail"] == "https://github.com/team/app"
 
 
+def test_bootstrap_detects_git_worktree_subdirectory(client, tmp_path):
+    workspace = tmp_path / "repo"
+    nested = workspace / "sandbox"
+    nested.mkdir(parents=True)
+    subprocess.run(["git", "init"], cwd=workspace, check=True, capture_output=True)
+
+    test_settings = Settings(
+        users_store_path=tmp_path / "users.json",
+        jwt_secret="test-secret-key",
+        memory_store_path=str(tmp_path / "memory.json"),
+        voiceops_cache_path=tmp_path / "cache.json",
+        llm_provider="mock",
+        voiceops_workspace=str(nested),
+    )
+    app.dependency_overrides[get_settings] = lambda: test_settings
+
+    res = client.get(
+        "/console/bootstrap",
+        headers={"Authorization": f"Bearer {_token(client)}"},
+    )
+
+    assert res.status_code == 200
+    data = res.json()
+    github = next(i for i in data["integrations"] if i["id"] == "github")
+    assert data["workspace"]["is_git_repo"] is True
+    assert github["detail"] == "Local git repo, no GitHub remote"
+
+
 def test_admin_can_connect_local_workspace_without_restart(client, tmp_path):
     workspace = tmp_path / "repo"
     workspace.mkdir()
@@ -291,69 +321,124 @@ def test_on_call_cannot_connect_server_workspace(client, tmp_path):
     assert res.status_code == 403
 
 
-def test_connect_workspace_rejects_github_url(client):
+def test_connect_workspace_accepts_github_url(client):
     res = client.post(
         "/console/workspace",
         headers={"Authorization": f"Bearer {_admin_token(client)}"},
         json={"path": "https://github.com/team/app.git"},
     )
 
-    assert res.status_code == 400
-    assert "local clone path" in res.json()["detail"]
+    assert res.status_code == 200
+    assert res.json()["workspace"]["remote_kind"] == "github"
 
 
-def test_admin_can_clone_github_repo_and_connect_workspace(client, monkeypatch, tmp_path):
-    target = tmp_path / "clones" / "app"
+def test_admin_can_connect_github_repo_without_clone(client, tmp_path):
     settings = app.dependency_overrides[get_settings]()
     settings.workspace_clone_root = tmp_path / "clones"
-    calls = []
-
-    def fake_run(args, **_kwargs):
-        if args[:2] == ["git", "clone"]:
-            calls.append(args)
-            target.mkdir(parents=True, exist_ok=True)
-            (target / ".git").mkdir()
-            (target / "README.md").write_text("# Cloned repo\n", encoding="utf-8")
-            return subprocess.CompletedProcess(args, 0, stdout="cloned", stderr="")
-        return subprocess.CompletedProcess(args, 1, stdout="", stderr="")
-
-    monkeypatch.setattr(github_module.subprocess, "run", fake_run)
 
     res = client.post(
         "/console/workspace/clone",
         headers={"Authorization": f"Bearer {_admin_token(client)}"},
         json={
             "remote_url": "https://github.com/team/app.git",
-            "target_path": str(target),
+            "target_path": str(tmp_path / "ignored"),
         },
     )
 
     assert res.status_code == 200
     data = res.json()
-    assert calls == [["git", "clone", "https://github.com/team/app.git", str(target)]]
-    assert settings.voiceops_workspace == str(target.resolve())
-    assert json.loads(settings.workspace_selection_path.read_text(encoding="utf-8"))["path"] == str(target.resolve())
+    assert settings.voiceops_workspace == "https://github.com/team/app.git"
+    assert json.loads(settings.workspace_selection_path.read_text(encoding="utf-8"))["path"] == "https://github.com/team/app.git"
     assert data["workspace"]["connected"] is True
     assert data["workspace"]["name"] == "app"
     assert data["workspace"]["source"] == "runtime"
-    assert data["workspace"]["readme_line"] == "# Cloned repo"
+    assert data["workspace"]["path"] is None
 
 
-def test_clone_workspace_uses_default_clone_root_when_target_is_empty(client, monkeypatch, tmp_path):
+def test_github_oauth_start_requires_admin_and_config(client):
+    on_call = _token(client)
+    admin = _admin_token(client)
+
+    forbidden = client.post(
+        "/console/github/oauth/start",
+        headers={"Authorization": f"Bearer {on_call}"},
+    )
+    assert forbidden.status_code == 403
+
+    missing_config = client.post(
+        "/console/github/oauth/start",
+        headers={"Authorization": f"Bearer {admin}"},
+    )
+    assert missing_config.status_code == 400
+
+    settings = app.dependency_overrides[get_settings]()
+    settings.github_oauth_client_id = "client-id"
+    settings.github_oauth_client_secret = "client-secret"
+
+    started = client.post(
+        "/console/github/oauth/start",
+        headers={"Authorization": f"Bearer {admin}"},
+    )
+    assert started.status_code == 200
+    body = started.json()
+    assert body["scope"] == "repo"
+    assert "client_id=client-id" in body["authorize_url"]
+    assert "state=" in body["authorize_url"]
+
+
+def test_github_oauth_callback_stores_token_for_api(client, monkeypatch):
+    import app.workspace.github as github_workspace
+    import app.workspace.github_auth as github_auth
+
+    settings = app.dependency_overrides[get_settings]()
+    settings.github_oauth_client_id = "client-id"
+    settings.github_oauth_client_secret = "client-secret"
+    admin = _admin_token(client)
+    started = client.post(
+        "/console/github/oauth/start",
+        headers={"Authorization": f"Bearer {admin}"},
+    ).json()
+    state = started["authorize_url"].split("state=", 1)[1].split("&", 1)[0]
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload).encode("utf-8")
+
+    def fake_urlopen(req, timeout=30):
+        if req.full_url == settings.github_oauth_token_url:
+            return FakeResponse({"access_token": "gho_private_token"})
+        if req.full_url == "https://api.github.com/user":
+            return FakeResponse({"login": "octo"})
+        raise AssertionError(req.full_url)
+
+    monkeypatch.setattr(github_auth.request, "urlopen", fake_urlopen)
+
+    callback = client.get(f"/console/github/oauth/callback?code=abc&state={state}")
+    assert callback.status_code == 200
+    assert "GitHub connected" in callback.text
+
+    status = client.get(
+        "/console/github/oauth/status",
+        headers={"Authorization": f"Bearer {admin}"},
+    ).json()
+    assert status["connected"] is True
+    assert status["source"] == "oauth"
+    assert status["login"] == "octo"
+    assert github_workspace._github_auth_header(settings) == {"Authorization": "Bearer gho_private_token"}
+
+
+def test_clone_workspace_uses_remote_url_when_target_is_empty(client, tmp_path):
     settings = app.dependency_overrides[get_settings]()
     settings.workspace_clone_root = tmp_path / "default-clones"
-    target = settings.workspace_clone_root / "api"
-    calls = []
-
-    def fake_run(args, **_kwargs):
-        if args[:2] == ["git", "clone"]:
-            calls.append(args)
-            target.mkdir(parents=True, exist_ok=True)
-            (target / ".git").mkdir()
-            return subprocess.CompletedProcess(args, 0, stdout="cloned", stderr="")
-        return subprocess.CompletedProcess(args, 1, stdout="", stderr="")
-
-    monkeypatch.setattr(github_module.subprocess, "run", fake_run)
 
     res = client.post(
         "/console/workspace/clone",
@@ -362,14 +447,13 @@ def test_clone_workspace_uses_default_clone_root_when_target_is_empty(client, mo
     )
 
     assert res.status_code == 200
-    assert calls == [["git", "clone", "git@github.com:team/api.git", str(target.resolve())]]
-    assert res.json()["workspace"]["path"] == str(target.resolve())
+    assert res.json()["workspace"]["configured_workspace"] == "git@github.com:team/api.git"
+    assert res.json()["workspace"]["path"] is None
 
 
-def test_clone_workspace_uses_authenticated_github_cli_for_https_repo(client, monkeypatch, tmp_path):
+def test_clone_workspace_does_not_call_github_cli_for_https_repo(client, monkeypatch, tmp_path):
     settings = app.dependency_overrides[get_settings]()
     settings.workspace_clone_root = tmp_path / "default-clones"
-    target = settings.workspace_clone_root / "app"
     calls = []
 
     monkeypatch.setattr(github_module.shutil, "which", lambda command: "/usr/bin/gh" if command == "gh" else None)
@@ -378,10 +462,6 @@ def test_clone_workspace_uses_authenticated_github_cli_for_https_repo(client, mo
         calls.append(args)
         if args == ["gh", "auth", "status"]:
             return subprocess.CompletedProcess(args, 0, stdout="Logged in to github.com", stderr="")
-        if args == ["gh", "repo", "clone", "team/app", str(target.resolve())]:
-            target.mkdir(parents=True, exist_ok=True)
-            (target / ".git").mkdir()
-            return subprocess.CompletedProcess(args, 0, stdout="cloned", stderr="")
         return subprocess.CompletedProcess(args, 1, stdout="", stderr="unexpected")
 
     monkeypatch.setattr(github_module.subprocess, "run", fake_run)
@@ -393,14 +473,11 @@ def test_clone_workspace_uses_authenticated_github_cli_for_https_repo(client, mo
     )
 
     assert res.status_code == 200
-    assert calls[:2] == [
-        ["gh", "auth", "status"],
-        ["gh", "repo", "clone", "team/app", str(target.resolve())],
-    ]
-    assert res.json()["workspace"]["path"] == str(target.resolve())
+    assert calls == []
+    assert res.json()["workspace"]["path"] is None
 
 
-def test_clone_workspace_rejects_non_github_and_relative_targets(client, tmp_path):
+def test_clone_workspace_rejects_non_github_remote(client, tmp_path):
     token = _admin_token(client)
     settings = app.dependency_overrides[get_settings]()
     settings.workspace_clone_root = tmp_path / "clones"
@@ -410,26 +487,11 @@ def test_clone_workspace_rejects_non_github_and_relative_targets(client, tmp_pat
         headers={"Authorization": f"Bearer {token}"},
         json={"remote_url": "https://evil.example/team/app.git", "target_path": str(tmp_path / "app")},
     )
-    bad_target = client.post(
-        "/console/workspace/clone",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"remote_url": "git@github.com:team/app.git", "target_path": "relative/app"},
-    )
-    outside_target = client.post(
-        "/console/workspace/clone",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"remote_url": "git@github.com:team/app.git", "target_path": str(tmp_path / "outside" / "app")},
-    )
-
     assert bad_remote.status_code == 400
     assert "GitHub" in bad_remote.json()["detail"]
-    assert bad_target.status_code == 400
-    assert "absolute" in bad_target.json()["detail"]
-    assert outside_target.status_code == 400
-    assert "WORKSPACE_CLONE_ROOT" in outside_target.json()["detail"]
 
 
-def test_clone_workspace_redacts_git_failure_secrets(client, monkeypatch, tmp_path):
+def test_clone_workspace_ignores_target_and_connects_remote(client, monkeypatch, tmp_path):
     token = _admin_token(client)
     settings = app.dependency_overrides[get_settings]()
     settings.workspace_clone_root = tmp_path
@@ -449,12 +511,9 @@ def test_clone_workspace_redacts_git_failure_secrets(client, monkeypatch, tmp_pa
         headers={"Authorization": f"Bearer {token}"},
         json={"remote_url": "https://github.com/team/app.git", "target_path": str(tmp_path / "app")},
     )
-    detail = res.json()["detail"]
 
-    assert res.status_code == 409
-    assert "ghp_abcdefghijklmnopqrstuvwxyz123456" not in detail
-    assert "sk-test-secret-value-123456" not in detail
-    assert "[redacted]" in detail
+    assert res.status_code == 200
+    assert res.json()["workspace"]["configured_workspace"] == "https://github.com/team/app.git"
 
 
 def test_on_call_cannot_clone_server_workspace(client, tmp_path):

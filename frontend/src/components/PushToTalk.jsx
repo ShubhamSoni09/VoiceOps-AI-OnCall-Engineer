@@ -234,7 +234,7 @@ export default function PushToTalk({
   }
 
   return (
-    <footer className={footerClass}>
+    <footer className={footerClass} aria-label="Command dock">
       <button
         className={`mic${micUnavailable ? ' text-mode' : ''}`}
         type="button"

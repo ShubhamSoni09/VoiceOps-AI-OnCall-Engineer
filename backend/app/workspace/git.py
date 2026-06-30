@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.cache import JsonTTLCache
 from app.config import Settings
+from app.workspace.github import github_diff, github_status, is_github_workspace
 from app.workspace.models import GitDiffResponse, GitFileStatus, GitStatusResponse
 from app.workspace.tools import WorkspaceError, get_workspace_root
 
@@ -19,6 +20,8 @@ class WorkspaceGitService:
         self._cache = JsonTTLCache(settings.voiceops_cache_path)
 
     def status(self, *, use_cache: bool = True) -> GitStatusResponse:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            return github_status(self._settings)
         root = get_workspace_root(self._settings.voiceops_workspace)
         cache_key = _cache_key(root, "status")
         source_token = _workspace_source_token(root)
@@ -56,6 +59,8 @@ class WorkspaceGitService:
         return response
 
     def diff(self, *, limit: int = 12000, use_cache: bool = True) -> GitDiffResponse:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            return github_diff(self._settings)
         root = get_workspace_root(self._settings.voiceops_workspace)
         cache_key = _cache_key(root, f"diff:{limit}")
         source_token = _workspace_source_token(root)
@@ -89,6 +94,13 @@ class WorkspaceGitService:
         return response
 
     def create_action_branch(self, action_id: str, summary: str) -> dict:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            return {
+                "branch_created": False,
+                "branch_name": None,
+                "previous_branch": github_status(self._settings).branch,
+                "warning": "GitHub-direct mode creates branches during approval.",
+            }
         root = get_workspace_root(self._settings.voiceops_workspace)
         if not _is_git_repo(root):
             return {
@@ -128,6 +140,8 @@ class WorkspaceGitService:
         }
 
     def commit_files(self, *, summary: str, files: list[str], message: str | None = None) -> dict:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            raise WorkspaceError("GitHub-direct mode commits during approval and does not use a local checkout.")
         root = get_workspace_root(self._settings.voiceops_workspace)
         if not _is_git_repo(root):
             raise WorkspaceError(_git_repo_warning(root))
@@ -160,6 +174,8 @@ class WorkspaceGitService:
         }
 
     def invalidate(self) -> None:
+        if is_github_workspace(self._settings.voiceops_workspace):
+            return
         root = get_workspace_root(self._settings.voiceops_workspace)
         self._cache.delete_prefix(_cache_prefix(root))
 

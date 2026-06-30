@@ -63,6 +63,7 @@ import {
   fetchBootstrap,
   fetchAgentSettings,
   fetchExternalAgentProviders,
+  fetchGithubOAuthStatus,
   fetchLLMProviders,
   fetchRoom,
   fetchRoomAudit,
@@ -86,6 +87,7 @@ import {
   runExternalAgent,
   speakerLiveUrl,
   startExternalAgentOAuth,
+  startGithubOAuth,
   disconnectLLMProvider,
   updateAgentSettings,
   updateAgentLLMRoute,
@@ -123,17 +125,29 @@ export function buildRoomStatus({
   }
 }
 
-function activeWorkspaceInfo(workspace, room) {
+export function activeWorkspaceInfo(workspace, room) {
   const roomPath = String(room?.workspace_path || '').trim()
   if (!roomPath) return workspace
-  const name = roomPath.split(/[\\/]/).filter(Boolean).pop() || 'room repo'
+  const githubMatch = roomPath.match(/github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?$/i)
+  const workspacePath = String(workspace?.path || workspace?.configured_workspace || '').trim()
+  const sameWorkspace = Boolean(workspacePath && workspacePath === roomPath)
+  const name = githubMatch
+    ? githubMatch[2]
+    : roomPath.split(/[\\/]/).filter(Boolean).pop() || 'room repo'
   return {
+    ...(sameWorkspace ? workspace : {}),
     connected: true,
-    path: roomPath,
+    path: githubMatch ? null : roomPath,
     name,
     source: 'room',
     configured_workspace: roomPath,
-    persistence_note: 'Room-scoped repository. Code actions in this room use this local clone.',
+    remote_url: githubMatch ? `https://github.com/${githubMatch[1]}/${githubMatch[2]}` : sameWorkspace ? workspace?.remote_url : null,
+    remote_kind: githubMatch ? 'github' : sameWorkspace ? workspace?.remote_kind : 'none',
+    remote_web_url: githubMatch ? `https://github.com/${githubMatch[1]}/${githubMatch[2]}` : sameWorkspace ? workspace?.remote_web_url : null,
+    is_git_repo: githubMatch ? true : sameWorkspace ? workspace?.is_git_repo : false,
+    persistence_note: githubMatch
+      ? 'Room-scoped GitHub repository. Code actions use GitHub directly.'
+      : 'Room-scoped repository. Code actions in this room use this local clone.',
   }
 }
 
@@ -216,6 +230,7 @@ export default function App() {
   const [agentLLMRouting, setAgentLLMRouting] = useState(null)
   const [llmProviders, setLlmProviders] = useState([])
   const [externalAgentProviders, setExternalAgentProviders] = useState(null)
+  const [githubOAuth, setGithubOAuth] = useState(null)
   const [agentSettingsSaving, setAgentSettingsSaving] = useState(false)
   const [agentSettingsError, setAgentSettingsError] = useState('')
   const [speakerError, setSpeakerError] = useState('')
@@ -423,6 +438,17 @@ export default function App() {
     }
   }, [])
 
+  const refreshGithubOAuth = useCallback(async () => {
+    try {
+      const status = await fetchGithubOAuthStatus()
+      setGithubOAuth(status)
+      return status
+    } catch (_err) {
+      setGithubOAuth(null)
+      return null
+    }
+  }, [])
+
   const scheduleRoomRefresh = useCallback((eventName) => {
     window.clearTimeout(roomRefreshTimerRef.current)
     roomRefreshTimerRef.current = window.setTimeout(async () => {
@@ -458,7 +484,7 @@ export default function App() {
         ])
         setAuditEvents(audit)
         setWorkDashboard(dashboard)
-        Promise.allSettled([refreshAgentSettings(), refreshExternalAgents(), refreshLLMProviders(), refreshAgentLLMRouting()])
+        Promise.allSettled([refreshAgentSettings(), refreshExternalAgents(), refreshLLMProviders(), refreshAgentLLMRouting(), refreshGithubOAuth()])
         try {
           const [runs, assignments] = await Promise.all([
             fetchAgentRuns(ROOM_ID, 8),
@@ -486,7 +512,7 @@ export default function App() {
     })()
 
     return bootstrapRequestRef.current
-  }, [applyRoomSnapshot, refreshAgentLLMRouting, refreshAgentSettings, refreshExternalAgents, refreshLLMProviders, refreshSpeakers])
+  }, [applyRoomSnapshot, refreshAgentLLMRouting, refreshAgentSettings, refreshExternalAgents, refreshGithubOAuth, refreshLLMProviders, refreshSpeakers])
 
   const handleConnectWorkspace = useCallback(async (path) => {
     const room = await connectRoomWorkspace(ROOM_ID, path)
@@ -511,6 +537,14 @@ export default function App() {
     }
     return room
   }, [applyRoomSnapshot])
+
+  const handleConnectGithubOAuth = useCallback(async () => {
+    const result = await startGithubOAuth()
+    window.open(result.authorize_url, 'voiceops-github-oauth', 'width=720,height=760')
+    window.setTimeout(refreshGithubOAuth, 1500)
+    window.setTimeout(refreshGithubOAuth, 5000)
+    return result
+  }, [refreshGithubOAuth])
 
   useEffect(() => {
     document.title = APP_CONSOLE_TITLE
@@ -1637,6 +1671,11 @@ export default function App() {
 
   async function handleStartExternalAgentOAuth(provider) {
     const result = await startExternalAgentOAuth(provider)
+    if (result?.authorization_url) {
+      window.open(result.authorization_url, `voiceops-${provider}-oauth`, 'width=720,height=760')
+      window.setTimeout(refreshExternalAgents, 1500)
+      window.setTimeout(refreshExternalAgents, 5000)
+    }
     await refreshExternalAgents()
     return result
   }
@@ -1864,6 +1903,8 @@ export default function App() {
             onDisconnectLLMProvider={handleDisconnectLLMProvider}
             onConnectWorkspace={handleConnectWorkspace}
             onCloneWorkspace={handleCloneWorkspace}
+            githubOAuth={githubOAuth}
+            onConnectGithubOAuth={bootstrap?.user?.permissions?.includes('admin:manage') ? handleConnectGithubOAuth : undefined}
             onCreateAgentAssignment={handleCreateAgentAssignment}
             onDispatchAgentAssignment={handleDispatchAgentAssignment}
             onCancelAgentAssignment={handleCancelAgentAssignment}

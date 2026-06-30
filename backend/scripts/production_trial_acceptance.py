@@ -19,7 +19,7 @@ for path in (BACKEND_ROOT, TESTS_ROOT):
         sys.path.insert(0, value)
 
 from app.collab.event_store_readiness import build_event_store_readiness
-from app.config import Settings
+from app.config import Settings, settings_from_env_file
 from app.system.deployment import build_deployment_hardening_report
 from app.system.security import StartupSecurityError, validate_startup_security
 from scripts.final_acceptance_audit import run_final_acceptance_audit
@@ -88,7 +88,7 @@ def run_production_trial_acceptance(
 
 
 def _settings_from_env_file(env_path: Path) -> Settings:
-    settings = Settings(_env_file=env_path)
+    settings = settings_from_env_file(env_path)
     base = env_path.resolve().parent
     updates: dict[str, Any] = {}
     path_fields = [

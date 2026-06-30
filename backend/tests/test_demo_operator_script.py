@@ -35,6 +35,7 @@ def test_operator_local_profile_sets_mock_provider():
     assert commands[0].env["SPEAKER_PROVIDER"] == "mock"
     assert "--timeout" in commands[0].command
     assert commands[0].command[commands[0].command.index("--timeout") + 1] == "222"
+    assert commands[0].timeout_seconds == 900
 
 
 def test_operator_real_mac_profile_sets_whisperx_provider():

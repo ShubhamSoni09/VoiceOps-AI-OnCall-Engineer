@@ -1,169 +1,343 @@
-# VoiceOps - AI Teammate Console
+<p align="center">
+  <strong>VoiceOps</strong>
+</p>
 
-Run multi-person coding meetings with an always-online AI teammate, speaker-aware memory, approved code actions, and auditable handoffs.
+<p align="center">
+  An open-source AI coworking room for human engineering teams and coding agents.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-black.svg"></a>
+  <img alt="Status: technical preview" src="https://img.shields.io/badge/status-technical%20preview-111111.svg">
+  <img alt="Local first" src="https://img.shields.io/badge/runtime-local--first-111111.svg">
+  <img alt="Approval first" src="https://img.shields.io/badge/code%20changes-approval--first-111111.svg">
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a>
+  ·
+  <a href="#demo-flow">Demo flow</a>
+  ·
+  <a href="#core-features">Features</a>
+  ·
+  <a href="#architecture">Architecture</a>
+  ·
+  <a href="#readiness-and-security">Security</a>
+</p>
+
+---
+
+VoiceOps gives a team one shared room for meeting context, memory, code work, and approval-first patches. It is built for the moment where humans discuss code, ask an AI teammate to help, and still want every file change to be visible, reviewable, and auditable before it lands.
+
+VoiceOps is a local-first technical preview. It is ready for demos, local experiments, and feedback. It is not production-ready software yet.
+
+## Product Snapshot
+
+| Surface | What it does |
+| --- | --- |
+| `Team room` | Invite teammates into the same shared engineering room. |
+| `Work` | Show the next useful action instead of a dense dashboard. |
+| `Approval` | Review agent patch proposals and click into the diff. |
+| `Agent setup` | Connect Claude, Codex, Cursor, or a local coding agent. |
+| Command dock | Ask memory questions or request code work from the bottom input. |
+
+The seeded local demo starts with a `main` room, meeting context, room memory, and one pending approval against the `sandbox/` demo repository.
+
+## Why VoiceOps
+
+Coding meetings usually scatter across chat, calls, docs, terminals, and pull requests. AI coding agents make that worse if they work outside the team room and silently mutate files.
+
+VoiceOps takes the opposite path:
+
+| Problem | VoiceOps approach |
+| --- | --- |
+| Decisions vanish after meetings | Room memory keeps decisions, tasks, risks, and code references. |
+| Agents work out of band | Coding agents propose work inside the shared room. |
+| Code changes are hard to audit | Every patch waits in `Approval` with requester, files, diff, and metadata. |
+| Demo setup is painful | `make dev` seeds a local no-key demo with mock providers. |
+
+```text
+Team room + meeting memory + coding agents + approval gate
+```
+
+## Quick Start
+
+### Requirements
+
+| Tool | Version |
+| --- | --- |
+| Python | 3.11+ |
+| Node.js | 20+ |
+| npm | bundled with Node |
+
+### Run the local demo
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+cd frontend && npm install && cd ..
+make dev
+```
+
+Open:
+
+```text
+http://127.0.0.1:5191/
+```
+
+Demo login:
+
+```text
+email: priya@voiceops.dev
+password: oncall123
+```
+
+`make dev` runs the FastAPI backend and Vite frontend. It first regenerates a gitignored local demo runtime:
+
+| Generated local artifact | Purpose |
+| --- | --- |
+| `backend/.env.local` | Local demo environment. |
+| `backend/data/collaboration.local.sqlite3` | Seeded room state and approvals. |
+| demo users | Local login only. |
+| `main` room | Timeline, memory, and one pending approval. |
+| mock providers | No-key LLM, speech, speaker, and agent paths. |
+| `sandbox/` | Editable demo workspace. |
+
+Reset demo state:
+
+```bash
+make demo-reset
+```
+
+Run the public-preview check:
+
+```bash
+make check
+```
+
+## Demo Flow
+
+Use this path for a short video or live demo:
+
+| Step | Action | Shot |
+| --- | --- | --- |
+| 1 | Sign in with the demo user. | Local technical preview. |
+| 2 | Show `Team room`. | Humans join the same room. |
+| 3 | Type `what is still open?`. | Memory answers from room context. |
+| 4 | Show `Work`. | One next action, not a cockpit. |
+| 5 | Open `Approval`. | Pending patch proposal. |
+| 6 | Click `Diff preview`. | Human review moment. |
+| 7 | Open `Agent setup`. | `Connect Claude or Codex`. |
+| 8 | End on approval state. | Agents propose, humans approve. |
+
+Full script: [`docs/PROMO_VIDEO.md`](docs/PROMO_VIDEO.md)
+
+## Core Features
+
+### Team Room
+
+Rooms scope people, the AI teammate, timeline events, handoffs, memory, approvals, and code work. The local demo uses `main`.
+
+### Command Dock
+
+The command dock is the primary interaction surface:
+
+```text
+what is still open?
+review the repo status
+prepare a small patch
+```
+
+Voice is supported by the backend, but the open-source demo works well with text only.
+
+### Meeting Memory
+
+VoiceOps stores room decisions, tasks, questions, risks, code references, speaker events, and approval history. It can answer cited memory questions with deterministic local retrieval.
+
+### Approval-First Code Work
+
+Agents can propose diffs, but file writes stay behind a human approval step.
+
+Patch proposals include:
+
+| Field | Why it matters |
+| --- | --- |
+| requester | Shows who asked for the work. |
+| changed files | Shows the affected surface. |
+| diff preview | Makes review the core moment. |
+| branch metadata | Keeps Git state auditable. |
+| verification | Captures test command or evidence. |
+| approve/reject | Keeps humans in control. |
+
+### External Coding Agents
+
+VoiceOps models Claude Code, OpenAI Codex, Cursor, and local/open agents as external coding-agent providers.
+
+| Provider path | Use |
+| --- | --- |
+| OAuth/API | Read-only or provider-backed flows when configured. |
+| Local CLI | Code-changing agent work in a temporary workspace. |
+| Mock provider | Zero-key local demo. |
+
+Patch mode still creates a pending approval. Providers propose; humans approve.
+
+### Speaker-Aware Workflows
+
+The project includes a speaker validation pipeline for real team trials. The default demo uses mock speech providers. Real speaker verification requires WhisperX/pyannote, `HF_TOKEN`, and local audio tooling.
+
+### Local-First Runtime
+
+The default runtime uses local files and SQLite under `backend/data/`, all gitignored. The demo can be reset at any time.
+
+## Optional Real Integrations
+
+### LLMs
+
+Set one provider before starting the backend:
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5-mini
+
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=...
+ANTHROPIC_MODEL=claude-sonnet-4-5
+
+LLM_PROVIDER=openai_compatible
+OPENAI_COMPATIBLE_BASE_URL=http://127.0.0.1:8000/v1
+OPENAI_COMPATIBLE_API_KEY=
+OPENAI_COMPATIBLE_MODEL=glm-5.2
+```
+
+### Coding Agents
+
+Use `Agent setup` -> `Connected agents`.
+
+| Agent | Connection path |
+| --- | --- |
+| Claude Code | OAuth/API when configured, or local CLI. |
+| OpenAI Codex | OAuth/API when configured, or local CLI. |
+| Cursor | Local CLI. |
+| Local/open agent | Local CLI command template. |
+
+### GitHub
+
+Private repository and PR flows can use GitHub sign-in, `GITHUB_TOKEN`, or `GH_TOKEN`. Real PR creation is disabled by default and must be explicitly enabled after review.
+
+### Speaker Verification
+
+Real speaker verification requires WhisperX/pyannote, `HF_TOKEN`, local audio tooling, and accepted model terms.
+
+Start here: [`docs/SPEAKER_VALIDATION.md`](docs/SPEAKER_VALIDATION.md)
 
 ## Architecture
 
-```
-Audio/Text → STT → Intent → Normalization → Context → Workspace Orchestrator → sandbox/MCP
+```mermaid
+flowchart LR
+  A["Audio or typed command"] --> B["Intent and normalization"]
+  B --> C["Room context and memory"]
+  C --> D["Workspace orchestrator"]
+  D --> E["Agent or workspace tools"]
+  E --> F["Pending approval"]
+  F --> G["Human approve or reject"]
+  G --> H["Audited result"]
 ```
 
-## Quick start
+Runtime layout:
 
-### Backend
+```text
+React console
+  -> FastAPI backend
+  -> room timeline + memory + approvals
+  -> workspace orchestrator
+  -> sandbox/MCP workspace tools
+  -> external coding-agent providers
+```
+
+## Project Layout
+
+```text
+backend/      FastAPI app, auth, room state, memory, agents, workspace tools
+frontend/     React console and local demo UI
+docs/         setup, security, demo, provider, and architecture notes
+mcp-server/   MCP tools scoped to VOICEOPS_WORKSPACE
+sandbox/      demo workspace used by approval-first code actions
+design/       older standalone design artifacts
+```
+
+## Common Commands
+
+| Command | Purpose |
+| --- | --- |
+| `make demo-reset` | Reset demo data and seed the main room. |
+| `make dev` | Run backend and frontend. |
+| `make check` | Run public-preview tests and frontend build. |
+| `cd backend && pytest` | Run backend tests. |
+| `cd frontend && npm run test:unit` | Run frontend unit tests. |
+| `cd frontend && npm run build` | Build frontend assets. |
+
+Manual backend/frontend commands:
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# set OPENAI_API_KEY, ANTHROPIC_API_KEY, or an OpenAI-compatible base URL if using a real LLM
-# set VOICEOPS_WORKSPACE=sandbox or an absolute local repo path to connect code tools
-uvicorn app.main:app --host 127.0.0.1 --port 8001
+python scripts/bootstrap_local_runtime.py --env-file .env.local --workspace ../sandbox --force --replace-event-store --seed-demo-room
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+
+cd ../frontend
+VITE_API_TARGET=http://127.0.0.1:8001 VITE_DEV_PORT=5191 npm run dev -- --host 127.0.0.1
 ```
 
-### Dashboards
+## Readiness And Security
 
-| UI | URL | Notes |
-|----|-----|--------|
-| HTML (wired) | http://127.0.0.1:8001/dashboard | Login → voice + sandbox orchestrator |
-| React (Vite) | http://localhost:5191 | `cd frontend && npm install && npm run dev` |
+VoiceOps is safe to run as a local technical preview. Do not expose the default demo runtime as a public production service.
 
-Demo login: `priya@voiceops.dev` / `oncall123`
+Before sharing a repo or recording a demo:
 
-### Real speaker verification
+```bash
+make demo-reset
+make check
+```
 
-For a real team trial, start with [`docs/TEAM_ONBOARDING.md`](docs/TEAM_ONBOARDING.md) and audit the package:
+Before any production-like deployment:
 
 ```bash
 cd backend
-python scripts/team_onboarding_check.py --json --require-ready
+python scripts/security_readiness.py --require-ready --json
 ```
 
-For repeatable demo operation, start with the operator command set:
+The default local demo intentionally keeps demo users enabled and uses local development secrets. The production security gate should fail until those are replaced.
 
-```bash
-cd backend
-python scripts/demo_operator.py --profile local
-python scripts/demo_operator.py --profile local --run --json
-```
+| Resource | Link |
+| --- | --- |
+| Security policy | [`SECURITY.md`](SECURITY.md) |
+| Release checklist | [`docs/PUBLIC_RELEASE_CHECKLIST.md`](docs/PUBLIC_RELEASE_CHECKLIST.md) |
+| Security review | [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md) |
 
-Profiles and failure handling are documented in [`docs/OPERATOR_RUNBOOK.md`](docs/OPERATOR_RUNBOOK.md).
+## Documentation
 
-For local WhisperX/pyannote verification on a Mac, keep live meeting timeouts short but give the offline verification smoke enough room to load diarization models:
+| Topic | Document |
+| --- | --- |
+| New clone path | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
+| Promo video script | [`docs/PROMO_VIDEO.md`](docs/PROMO_VIDEO.md) |
+| External agents | [`docs/EXTERNAL_AGENT_PROVIDERS.md`](docs/EXTERNAL_AGENT_PROVIDERS.md) |
+| Speaker validation | [`docs/SPEAKER_VALIDATION.md`](docs/SPEAKER_VALIDATION.md) |
+| RAG meeting memory | [`docs/RAG_MEMORY.md`](docs/RAG_MEMORY.md) |
+| Multi-agent workflow | [`docs/MULTI_AGENT.md`](docs/MULTI_AGENT.md) |
+| Long-term memory | [`docs/LONG_TERM_MEMORY.md`](docs/LONG_TERM_MEMORY.md) |
+| Project ontology | [`docs/PROJECT_ONTOLOGY.md`](docs/PROJECT_ONTOLOGY.md) |
+| Operator runbook | [`docs/OPERATOR_RUNBOOK.md`](docs/OPERATOR_RUNBOOK.md) |
+| Goal roadmap | [`docs/GOAL_ROADMAP.md`](docs/GOAL_ROADMAP.md) |
 
-```env
-SPEAKER_PROVIDER=whisperx
-WHISPERX_DEVICE=cpu
-WHISPERX_WORKER_MODE=subprocess
-SPEAKER_VERIFICATION_TIMEOUT_SECONDS=300
-```
+## What Not To Claim Yet
 
-Run the generated two-speaker check with:
+- Production readiness.
+- Unattended code changes.
+- Silent workspace mutation by agents.
+- Real speaker verification without WhisperX/pyannote setup.
+- Real Claude, Codex, Cursor, or GitHub side effects without explicit credentials and enablement.
 
-```bash
-cd backend && python scripts/demo_readiness.py --generate-macos-tts --require-real-diarization --timeout 300
-```
+## License
 
-To prove the live WebSocket path also handles real diarized audio and writes the collaboration timeline, add the live meeting gate:
-
-```bash
-cd backend && python scripts/demo_readiness.py --generate-macos-tts --require-real-diarization --require-real-live-meeting --real-live-worker-mode persistent_subprocess --real-live-chunks 2 --timeout 300
-```
-
-For the frontend demo readiness harness, the default path stays fast and mock-backed:
-
-```bash
-cd frontend && npm run e2e:all -- --json
-```
-
-When the MacBook has WhisperX, pyannote assets, `HF_TOKEN`, `say`, and `ffmpeg` available, include the optional real live meeting gate in the same frontend report:
-
-```bash
-cd frontend && npm run e2e:all -- --json --real-live --real-live-worker-mode persistent_subprocess --real-live-chunks 2 --real-live-timeout 300
-```
-
-To prove the browser microphone path itself can feed real WhisperX and render speaker labels in the React UI, use the heavier browser gate:
-
-```bash
-cd frontend && npm run e2e:all -- --json --real-browser-live --real-browser-live-worker-mode persistent_subprocess --real-browser-live-timeout 180
-```
-
-These harnesses write a sanitized local evidence file at `backend/data/demo_evidence.json`. The right rail `Demo readiness` panel reads it through `/system/readiness` and shows the latest mock closure, real backend live, and real browser microphone results without storing raw audio.
-
-On a MacBook CPU this is near-real-time, not low-latency realtime: a short generated two-speaker sample currently takes about 20 seconds through the safe subprocess worker. `WHISPERX_WORKER_MODE=persistent_subprocess` starts a long-lived isolated worker so repeated live chunks can reuse loaded models while remaining killable from the backend. `--in-process-warmup` exists on `scripts/smoke_live_meeting_real.py` for manual diagnostics, but it is intentionally not used by readiness by default because native WhisperX/pyannote loading can hang inside the local Mac/conda stack and cannot always be interrupted safely.
-
-The room-level speaker validation API reports unknown labels, low-confidence labels, manual mappings, and real WhisperX verification evidence without storing raw audio. Details are in [`docs/SPEAKER_VALIDATION.md`](docs/SPEAKER_VALIDATION.md).
-
-### RAG meeting memory
-
-VoiceOps keeps a local deterministic RAG index for cited meeting answers, with short-memory and long-memory retrieval traces visible in the React console. Details are in [`docs/RAG_MEMORY.md`](docs/RAG_MEMORY.md).
-
-Run the isolated RAG smoke before a demo:
-
-```bash
-cd backend
-python scripts/smoke_rag_memory.py
-python scripts/smoke_rag_memory.py --json
-```
-
-### Multi-agent collaboration
-
-VoiceOps can route a meeting request through deterministic specialist agents: Coordinator, Meeting, Memory, Code, Review, Test, and Git. Details are in [`docs/MULTI_AGENT.md`](docs/MULTI_AGENT.md).
-
-Run the isolated multi-agent closure smoke:
-
-```bash
-cd backend
-python scripts/smoke_multi_agent.py
-python scripts/smoke_multi_agent.py --json
-```
-
-### External coding agents
-
-VoiceOps can connect Claude Code, OpenAI Codex, and Cursor as external coding-agent providers through OAuth/API key/local CLI style credentials. External agents can propose diffs, but workspace writes still require VoiceOps approval. Details are in [`docs/EXTERNAL_AGENT_PROVIDERS.md`](docs/EXTERNAL_AGENT_PROVIDERS.md).
-
-### Project ontology
-
-VoiceOps exposes a deterministic room-scoped ontology for people, files, memory, actions, approvals, and git branches. Details are in [`docs/PROJECT_ONTOLOGY.md`](docs/PROJECT_ONTOLOGY.md).
-
-### Long-term memory
-
-Approved actions, meeting decisions, speaker mapping audit events, and handoff summaries can be archived into deterministic room-scoped long-term memory. Details are in [`docs/LONG_TERM_MEMORY.md`](docs/LONG_TERM_MEMORY.md).
-
-### Goal roadmap
-
-The remaining multi-agent teammate work is tracked phase by phase with storage rules, cache policy, event rules, and quality gates in [`docs/GOAL_ROADMAP.md`](docs/GOAL_ROADMAP.md).
-
-Run the final acceptance audit when you need a machine-readable proof against the original multi-person AI teammate goal:
-
-```bash
-cd backend
-python scripts/final_acceptance_audit.py --json --require-accepted
-```
-
-### MCP workspace
-
-Set the same path in `.cursor/mcp.json` and `backend/.env`:
-
-```env
-VOICEOPS_WORKSPACE=sandbox
-```
-
-## Project layout
-
-```
-backend/          FastAPI - auth, voice, console bootstrap, orchestrator
-frontend/         React dashboard (from feat/ui-incident-dashboard), wired to API
-design/           HTML login + incident dashboard
-mcp-server/       MCP tools scoped to VOICEOPS_WORKSPACE
-sandbox/          checkout-api demo (missing /health on purpose)
-```
-
-## Tests
-
-```bash
-cd backend
-pytest
-```
+MIT. See [`LICENSE`](LICENSE).

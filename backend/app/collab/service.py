@@ -43,7 +43,7 @@ from app.rag.service import RagIndexService
 from app.redaction import redact_sensitive_text, redact_sensitive_value
 from app.voice_agent.models import OrchestratorResult, VoiceProcessResponse
 from app.workspace.git import WorkspaceGitService
-from app.workspace.github import build_pull_request_plan, create_pull_request
+from app.workspace.github import build_pull_request_plan, create_github_patch_pull_request, create_pull_request, is_github_workspace
 from app.workspace.service import WorkspaceCodeService
 from app.workspace.models import CodeQueryResponse
 from app.workspace.tools import WorkspaceError, configured_workspace_is_url, resolve_configured_workspace, run_command, write_file
@@ -1164,6 +1164,91 @@ class CollaborationService:
         test_command = payload.get("test_command") or "python -m pytest -q"
         if not files:
             raise ValueError("Approval proposal has no files to apply")
+
+        if is_github_workspace(settings.voiceops_workspace):
+            try:
+                pr = create_github_patch_pull_request(
+                    settings,
+                    action,
+                    files={str(path): str(content) for path, content in files.items()},
+                    approved_by=user.id,
+                )
+            except WorkspaceError as exc:
+                updated = self._finalize_action(
+                    room_id,
+                    action,
+                    status="failed",
+                    pending_approval=False,
+                    summary=f"Approval failed before GitHub PR creation: {exc}",
+                    command_output=str(exc),
+                    approval_status="failed",
+                    decided_by=user,
+                    note=note,
+                )
+                self._store.delete_approval_payload(room_id, action_id)
+                self._approval_payloads.pop(action_id, None)
+                self.add_agent_message(
+                    room_id,
+                    updated.summary,
+                    metadata={"source": "action_approval", "action_id": action_id, "status": updated.status},
+                )
+                return updated
+
+            git_metadata = {
+                "branch_created": True,
+                "branch_name": pr.get("head_branch"),
+                "commit_sha": pr.get("commit_sha"),
+                "files_changed": pr.get("files_changed") or list(files),
+                "remote_url": pr.get("remote_url"),
+            }
+            summary = (
+                f"{user.name} approved the patch. Opened GitHub pull request "
+                f"{pr.get('pull_request_url') or ''}; PR checks will run on GitHub."
+            ).strip()
+            updated = self._finalize_action(
+                room_id,
+                action,
+                status="completed",
+                pending_approval=False,
+                summary=summary,
+                command_output="Skipped local tests in GitHub-direct mode; use GitHub PR checks.",
+                approval_status="approved",
+                decided_by=user,
+                note=note,
+                approval_extra={
+                    "git": git_metadata,
+                    "pull_request": {
+                        "provider": "github",
+                        "mode": pr.get("mode"),
+                        "url": pr.get("pull_request_url"),
+                        "number": pr.get("pull_request_number"),
+                        "title": pr.get("title"),
+                        "base_branch": pr.get("base_branch"),
+                        "head_branch": pr.get("head_branch"),
+                        "commit_sha": pr.get("commit_sha"),
+                        "draft": pr.get("draft"),
+                        "created_by": user.id,
+                        "created_by_name": user.name,
+                        "created_at": _now().isoformat(),
+                        "command_results": pr.get("command_results") or [],
+                    },
+                },
+            )
+            self._store.delete_approval_payload(room_id, action_id)
+            self._approval_payloads.pop(action_id, None)
+            self.add_agent_message(
+                room_id,
+                summary,
+                metadata={
+                    "source": "action_approval",
+                    "action_id": action_id,
+                    "status": "completed",
+                    "approved_by": user.id,
+                    "pull_request_url": pr.get("pull_request_url"),
+                },
+            )
+            _archive_long_memory(room_id, self, settings)
+            return updated
 
         git_service = WorkspaceGitService(settings)
         git_metadata: dict = {}
@@ -2347,7 +2432,9 @@ def _validated_room_workspace_path(path: str) -> str:
     if not value:
         raise ValueError("Room workspace path is required.")
     if configured_workspace_is_url(value):
-        raise ValueError("Room workspace must be a local clone path, not a git remote URL.")
+        if not is_github_workspace(value):
+            raise ValueError("Room workspace URL must be a GitHub repository.")
+        return value
     root = resolve_configured_workspace(value)
     if root is None:
         raise ValueError("Room workspace path must be an existing local directory.")

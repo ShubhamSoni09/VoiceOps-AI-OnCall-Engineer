@@ -13,6 +13,7 @@ from app.orchestrator.test_summary import (
 )
 from app.voice_agent.models import IncidentAction, NormalizedCommand, OrchestratorResult, VoiceIntent
 from app.workspace.git import WorkspaceGitService
+from app.workspace.github import is_github_workspace
 from app.workspace.service import WorkspaceCodeService
 from app.workspace.tools import (
     WorkspaceError,
@@ -42,10 +43,11 @@ class WorkspaceOrchestrator:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._workspace_path = resolve_configured_workspace(settings.voiceops_workspace)
+        self._github_workspace = is_github_workspace(settings.voiceops_workspace)
 
     @property
     def connected(self) -> bool:
-        return self._workspace_path is not None
+        return self._workspace_path is not None or self._github_workspace
 
     async def execute(
         self,
@@ -108,6 +110,17 @@ class WorkspaceOrchestrator:
         return None
 
     async def _investigate(self, workspace: str | None, action: IncidentAction) -> OrchestratorResult:
+        if self._github_workspace:
+            tree = WorkspaceCodeService(self._settings).tree(limit=8)
+            file_names = [item.path for item in tree.files[:8]]
+            summary = f"I inspected the GitHub repository. Key files: {', '.join(file_names) or 'none found'}. Local tests are skipped; use PR checks."
+            return OrchestratorResult(
+                executed=True,
+                action=action.value,
+                summary=summary,
+                artifacts=[{"type": "logs", "title": "GitHub repository", "subtitle": f"{tree.total_files} files indexed"}],
+                files_changed=[],
+            )
         root_name = self._workspace_path.name if self._workspace_path else "workspace"
         _prepare_workspace(workspace)
         entries = list_directory(".", configured=workspace)
@@ -147,6 +160,14 @@ class WorkspaceOrchestrator:
         )
 
     async def _run_tests(self, workspace: str | None) -> OrchestratorResult:
+        if self._github_workspace:
+            return OrchestratorResult(
+                executed=True,
+                action=IncidentAction.TEST.value,
+                summary="Local tests are not available in GitHub-direct mode. Open or update a PR and use GitHub checks.",
+                artifacts=[{"type": "logs", "title": "GitHub checks", "subtitle": "local checkout skipped"}],
+                command_output="Skipped local tests in GitHub-direct mode.",
+            )
         _prepare_workspace(workspace)
         root_name = self._workspace_path.name if self._workspace_path else "workspace"
         app_source = ""
@@ -193,6 +214,15 @@ class WorkspaceOrchestrator:
         )
 
     async def _find_bug(self, workspace: str | None) -> OrchestratorResult:
+        if self._github_workspace:
+            return OrchestratorResult(
+                executed=True,
+                action=IncidentAction.FIND_BUG.value,
+                summary="I can inspect GitHub code directly, but bug validation needs GitHub PR checks because there is no local checkout.",
+                artifacts=[{"type": "logs", "title": "bug scan", "subtitle": "PR checks required"}],
+                command_output="Skipped local bug scan in GitHub-direct mode.",
+                files_changed=[],
+            )
         _prepare_workspace(workspace)
         test_result = run_command("python -m pytest -q", configured=workspace)
         passed = test_result["exit_code"] == 0
@@ -251,6 +281,46 @@ class WorkspaceOrchestrator:
         )
 
     async def _patch(self, workspace: str | None, transcript: str) -> OrchestratorResult:
+        if self._github_workspace:
+            try:
+                original = WorkspaceCodeService(self._settings).read("app.py", max_chars=80_000).content
+            except WorkspaceError:
+                return OrchestratorResult(
+                    executed=False,
+                    action=IncidentAction.PATCH.value,
+                    summary="Could not find app.py in the GitHub repository to patch.",
+                )
+            updated, llm_metadata = await self._generate_fix(original, "GitHub-direct patch request; local tests are unavailable.", transcript)
+            if not updated or updated.strip() == original.strip():
+                updated = _heuristic_health_fix(original)
+                llm_metadata = {**llm_metadata, "fallback": True, "fallback_strategy": "heuristic_health_fix"}
+            proposed_files = {"app.py": updated}
+            diff = _unified_diff("app.py", original, updated)
+            if not diff.strip():
+                return OrchestratorResult(
+                    executed=False,
+                    action=IncidentAction.PATCH.value,
+                    summary="I could not produce a meaningful GitHub patch from the request.",
+                )
+            return OrchestratorResult(
+                executed=False,
+                action=IncidentAction.PATCH.value,
+                summary="I prepared a GitHub patch for app.py. Review the diff and approve it to open a PR.",
+                files_changed=["app.py"],
+                artifacts=[{"type": "pr", "title": "1 file patch proposal", "subtitle": "waiting for approval"}],
+                command_output="Local tests skipped in GitHub-direct mode.",
+                pending_approval=True,
+                approval={
+                    "kind": "patch",
+                    "status": "pending_approval",
+                    "diff": diff,
+                    "test_command": "GitHub PR checks",
+                    "proposed_files": ["app.py"],
+                    "source": "workspace_orchestrator",
+                    "llm": llm_metadata,
+                },
+                approval_payload={"kind": "patch", "files": proposed_files, "test_command": "GitHub PR checks"},
+            )
         _prepare_workspace(workspace)
         test_before = run_command("python -m pytest -q", configured=workspace)
         if test_before["exit_code"] == 0:

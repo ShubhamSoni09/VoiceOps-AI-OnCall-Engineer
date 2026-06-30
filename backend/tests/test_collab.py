@@ -1,3 +1,4 @@
+import base64
 import textwrap
 import subprocess
 import time
@@ -1303,6 +1304,82 @@ def test_patch_action_waits_for_approval_and_approve_applies_change(client):
     assert "tests passed" in room["messages"][-1]["text"].lower()
 
 
+def test_github_direct_patch_approval_opens_pr_without_local_write(client, monkeypatch):
+    app_py = (
+        "from fastapi import FastAPI\n\n"
+        "app = FastAPI()\n\n"
+        "@app.get('/')\n"
+        "def root():\n"
+        "    return {'service': 'checkout-api'}\n"
+    )
+    calls = []
+
+    def fake_api(_settings, method, path, payload=None):
+        calls.append((method, path, payload))
+        if method == "GET" and path == "/repos/team/app":
+            return {"name": "app", "default_branch": "main", "html_url": "https://github.com/team/app"}
+        if method == "GET" and path == "/repos/team/app/contents/app.py?ref=main":
+            return {
+                "type": "file",
+                "size": len(app_py),
+                "content": base64.b64encode(app_py.encode("utf-8")).decode("ascii"),
+            }
+        if method == "GET" and path == "/repos/team/app/git/ref/heads/main":
+            return {"object": {"sha": "base123"}}
+        if method == "GET" and path.startswith("/repos/team/app/git/ref/heads/voiceops/"):
+            raise github_module.WorkspaceError("GitHub API failed (404): Not Found")
+        if method == "POST" and path == "/repos/team/app/git/refs":
+            return {}
+        if method == "GET" and path.startswith("/repos/team/app/contents/app.py?ref=voiceops/"):
+            return {"sha": "file123"}
+        if method == "PUT" and path == "/repos/team/app/contents/app.py":
+            assert "@app.get(\"/health\")" in base64.b64decode(payload["content"]).decode("utf-8")
+            return {"commit": {"sha": "commit123"}}
+        if method == "POST" and path == "/repos/team/app/pulls":
+            return {"html_url": "https://github.com/team/app/pull/7", "number": 7, "draft": True}
+        raise AssertionError((method, path))
+
+    monkeypatch.setattr(github_module, "_github_api", fake_api)
+    settings = app.dependency_overrides[get_settings]()
+    settings.github_pr_creation_enabled = True
+    token = _token(client, "priya@voiceops.dev", "oncall123")
+    admin = _token(client, "admin@voiceops.dev", "admin123")
+
+    bound = client.put(
+        "/collab/rooms/main/workspace",
+        headers={"Authorization": f"Bearer {admin}"},
+        json={"path": "https://github.com/team/app.git"},
+    )
+    assert bound.status_code == 200
+
+    voice = client.post(
+        "/voice/process-text",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "text": "fix the failing health check",
+            "session_id": "github-approval-session",
+            "room_id": "main",
+            "include_tts": False,
+        },
+    )
+    assert voice.status_code == 200
+    action = client.get("/collab/rooms/main", headers={"Authorization": f"Bearer {token}"}).json()["actions"][-1]
+    assert action["status"] == "pending_approval"
+
+    approved = client.post(
+        f"/collab/rooms/main/actions/{action['id']}/approve",
+        headers={"Authorization": f"Bearer {admin}"},
+        json={},
+    )
+
+    assert approved.status_code == 200
+    data = approved.json()
+    assert data["status"] == "completed"
+    assert data["approval"]["pull_request"]["url"] == "https://github.com/team/app/pull/7"
+    assert data["approval"]["git"]["commit_sha"] == "commit123"
+    assert any(call[0] == "PUT" and call[1] == "/repos/team/app/contents/app.py" for call in calls)
+
+
 def test_patch_approval_creates_local_git_branch_and_records_status(client):
     _init_git(client.workspace_path)
     token = _token(client, "priya@voiceops.dev", "oncall123")
@@ -1398,24 +1475,11 @@ def test_room_workspace_binding_is_used_for_voice_patch_approval(client, tmp_pat
     assert git["previous_branch"] in {"main", "master"}
 
 
-def test_admin_can_clone_github_repo_and_bind_room_workspace(client, monkeypatch, tmp_path):
+def test_admin_can_connect_github_repo_and_bind_room_workspace(client, tmp_path):
     settings = app.dependency_overrides[get_settings]()
     settings.workspace_clone_root = tmp_path / "clones"
-    target = settings.workspace_clone_root / "room-b" / "app"
     alice = _token(client, "priya@voiceops.dev", "oncall123")
     admin = _token(client, "admin@voiceops.dev", "admin123")
-    calls = []
-
-    def fake_run(args, **_kwargs):
-        if args[:2] == ["git", "clone"]:
-            calls.append(args)
-            target.mkdir(parents=True, exist_ok=True)
-            (target / ".git").mkdir()
-            (target / "README.md").write_text("# Room repo\n", encoding="utf-8")
-            return subprocess.CompletedProcess(args, 0, stdout="cloned", stderr="")
-        return subprocess.CompletedProcess(args, 1, stdout="", stderr="unexpected")
-
-    monkeypatch.setattr(github_module.subprocess, "run", fake_run)
 
     assert client.post(
         "/collab/rooms/room-b/join",
@@ -1429,17 +1493,6 @@ def test_admin_can_clone_github_repo_and_bind_room_workspace(client, monkeypatch
         json={"remote_url": "https://github.com/team/app.git"},
     )
     assert forbidden.status_code == 403
-    outside_target = client.post(
-        "/collab/rooms/room-b/workspace/clone",
-        headers={"Authorization": f"Bearer {admin}"},
-        json={
-            "remote_url": "https://github.com/team/app.git",
-            "target_path": str(tmp_path / "outside" / "app"),
-        },
-    )
-    assert outside_target.status_code == 400
-    assert "WORKSPACE_CLONE_ROOT" in outside_target.json()["detail"]
-
     cloned = client.post(
         "/collab/rooms/room-b/workspace/clone",
         headers={"Authorization": f"Bearer {admin}"},
@@ -1447,12 +1500,11 @@ def test_admin_can_clone_github_repo_and_bind_room_workspace(client, monkeypatch
     )
 
     assert cloned.status_code == 200
-    assert calls == [["git", "clone", "https://github.com/team/app.git", str(target.resolve())]]
     assert settings.voiceops_workspace == str(client.workspace_path)
-    assert cloned.json()["room"]["workspace_path"] == str(target.resolve())
+    assert cloned.json()["room"]["workspace_path"] == "https://github.com/team/app.git"
 
 
-def test_room_clone_redacts_git_failure_secrets(client, monkeypatch, tmp_path):
+def test_room_clone_connects_remote_without_git_subprocess(client, monkeypatch, tmp_path):
     settings = app.dependency_overrides[get_settings]()
     settings.workspace_clone_root = tmp_path / "clones"
     alice = _token(client, "priya@voiceops.dev", "oncall123")
@@ -1479,12 +1531,9 @@ def test_room_clone_redacts_git_failure_secrets(client, monkeypatch, tmp_path):
         headers={"Authorization": f"Bearer {admin}"},
         json={"remote_url": "https://github.com/team/app.git"},
     )
-    detail = res.json()["detail"]
 
-    assert res.status_code == 409
-    assert "ghp_abcdefghijklmnopqrstuvwxyz123456" not in detail
-    assert "sk-test-secret-value-123456" not in detail
-    assert "[redacted]" in detail
+    assert res.status_code == 200
+    assert res.json()["room"]["workspace_path"] == "https://github.com/team/app.git"
 
 
 def test_completed_patch_can_be_committed_locally(client):

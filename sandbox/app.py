@@ -1,4 +1,4 @@
-"""Simple checkout API — missing /health on purpose for agent testing."""
+"""Simple checkout API used by VoiceOps demo agent tests."""
 
 from fastapi import FastAPI
 
